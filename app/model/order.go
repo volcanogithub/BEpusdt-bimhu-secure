@@ -137,10 +137,13 @@ func (o *Order) SetExpired() {
 	Db.Save(o)
 }
 
-func (o *Order) SetSuccess() {
-	o.Status = OrderStatusSuccess
-
-	Db.Save(o)
+func (o *Order) SetSuccess() error {
+	confirmed, err := FinalizeOrderAndEnqueue(o.ID)
+	if err != nil {
+		return err
+	}
+	*o = confirmed
+	return nil
 }
 
 func (o *Order) SetFailed() {

@@ -409,7 +409,9 @@ func (t *ton) tradeConfirmHandle(context.Context) {
 			defer wg.Done()
 
 			// 一旦某笔交易所在的 shard block 被 MasterChain block 引用（commit），则该交易获得最终性（finality）。
-			markFinalConfirmed(order)
+			if err := markFinalConfirmed(order); err != nil {
+				log.Task.Error("finalize TON order", err)
+			}
 		}()
 	}
 

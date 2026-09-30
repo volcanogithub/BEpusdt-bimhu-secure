@@ -10,3 +10,14 @@ static/web
 static/secure
 *.log
 AGENTS.md
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/
+secrets/
+*.pem
+*.key
+docker-compose.override.yml

@@ -428,7 +428,9 @@ func (e *evm) tradeConfirmHandle(ctx context.Context) {
 		}
 
 		if data.Get("result.status").String() == "0x1" {
-			markFinalConfirmed(o)
+			if err := markFinalConfirmed(o); err != nil {
+				log.Task.Error("finalize EVM order", err)
+			}
 		}
 	}
 

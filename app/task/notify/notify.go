@@ -22,6 +22,7 @@ import (
 )
 
 type EpNotify struct {
+	EventID            string  `json:"event_id,omitempty"`
 	TradeId            string  `json:"trade_id"`             //  本地订单号
 	OrderId            string  `json:"order_id"`             //  客户交易id
 	Amount             float64 `json:"amount"`               //  订单金额 CNY

@@ -198,7 +198,11 @@ func (t *tron) blockParse(n any) {
 
 		var itm = trans.GetTransaction()
 		var id = hex.EncodeToString(trans.Txid)
-		for _, contract := range itm.GetRawData().GetContract() {
+		var hasTriggerContract bool
+		for contractIndex, contract := range itm.GetRawData().GetContract() {
+			// Native transfers do not have receipt logs. Keep them in a negative
+			// namespace so they cannot collide with a TRC20 receipt log index.
+			eventIndex := -1 - int64(contractIndex)
 			// 资源代理 DelegateResourceContract
 			if contract.GetType() == core.Transaction_Contract_DelegateResourceContract {
 				var foo = &core.DelegateResourceContract{}
@@ -257,11 +261,16 @@ func (t *tron) blockParse(n any) {
 					Timestamp:   timestamp,
 					TradeType:   model.TronTrx,
 					BlockNum:    cast.ToInt(num),
+					EventIndex:  eventIndex,
 				})
 			}
 
 			// 触发智能合约
 			if contract.GetType() == core.Transaction_Contract_TriggerSmartContract {
+				hasTriggerContract = true
+				// A call may emit multiple Transfer logs. Event identity must use
+				// the receipt log position, never calldata or contract position.
+				continue
 				var foo = &core.TriggerSmartContract{}
 				if err := contract.GetParameter().UnmarshalTo(foo); err != nil {
 
@@ -287,6 +296,7 @@ func (t *tron) blockParse(n any) {
 							Timestamp:   timestamp,
 							TradeType:   model.UsdtTrc20,
 							BlockNum:    cast.ToInt(num),
+							EventIndex:  eventIndex,
 						})
 					}
 				}
@@ -313,6 +323,7 @@ func (t *tron) blockParse(n any) {
 							Timestamp:   timestamp,
 							TradeType:   tradeType,
 							BlockNum:    cast.ToInt(num),
+							EventIndex:  eventIndex,
 						})
 					}
 				}
@@ -328,9 +339,25 @@ func (t *tron) blockParse(n any) {
 							Timestamp:   timestamp,
 							TradeType:   tradeType,
 							BlockNum:    cast.ToInt(num),
+							EventIndex:  eventIndex,
 						})
 					}
 				}
+			}
+		}
+
+		if hasTriggerContract {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			info, err := api.NewWalletClient(conn).GetTransactionInfoById(ctx, &api.BytesMessage{Value: trans.Txid})
+			cancel()
+			if err != nil {
+				log.Task.Error("GetTransactionInfoById while scanning TRC20 logs", err)
+				t.scheduleBlockRetry(num, 0)
+
+				return
+			}
+			if info.GetReceipt().GetResult() == core.Transaction_Result_SUCCESS {
+				transfers = append(transfers, t.parseTrc20ReceiptLogs(info, id, timestamp, num)...)
 			}
 		}
 	}
@@ -343,6 +370,56 @@ func (t *tron) blockParse(n any) {
 	}
 
 	log.Task.Info(fmt.Sprintf("区块扫描完成(Tron): %d 成功率：%s", num, conf.GetSuccessRate(conf.Tron)))
+}
+
+const trc20TransferTopic = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+// parseTrc20ReceiptLogs uses the zero-based position in TransactionInfo.Log as
+// the stable event index persisted in bep_chain_event.event_index.
+func (t *tron) parseTrc20ReceiptLogs(info *core.TransactionInfo, txHash string, timestamp time.Time, blockNum int) []transfer {
+	transfers := make([]transfer, 0)
+	for logIndex, eventLog := range info.GetLog() {
+		topics := eventLog.GetTopics()
+		if len(topics) < 3 || hex.EncodeToString(topics[0]) != trc20TransferTopic {
+			continue
+		}
+
+		contractAddress := last20(eventLog.GetAddress())
+		var tradeType model.TradeType
+		switch {
+		case bytes.Equal(contractAddress, last20(usdtTrc20ContractAddress)):
+			tradeType = model.UsdtTrc20
+		case bytes.Equal(contractAddress, last20(usdcTrc20ContractAddress)):
+			tradeType = model.UsdcTrc20
+		default:
+			continue
+		}
+
+		from := append([]byte{0x41}, last20(topics[1])...)
+		to := append([]byte{0x41}, last20(topics[2])...)
+		amount := new(big.Int).SetBytes(eventLog.GetData())
+		transfers = append(transfers, transfer{
+			Network:     conf.Tron,
+			TxHash:      txHash,
+			Amount:      decimal.NewFromBigInt(amount, model.GetTradeDecimal(tradeType)),
+			FromAddress: t.base58CheckEncode(from),
+			RecvAddress: t.base58CheckEncode(to),
+			Timestamp:   timestamp,
+			TradeType:   tradeType,
+			BlockNum:    blockNum,
+			EventIndex:  int64(logIndex),
+		})
+	}
+
+	return transfers
+}
+
+func last20(value []byte) []byte {
+	if len(value) <= 20 {
+		return value
+	}
+
+	return value[len(value)-20:]
 }
 
 func (t *tron) parseTrc20ContractTransfer(data []byte) (string, *big.Int) {
@@ -433,7 +510,9 @@ func (t *tron) tradeConfirmHandle(ctx context.Context) {
 			}
 
 			if trans.GetRet()[0].ContractRet == core.Transaction_Result_SUCCESS {
-				markFinalConfirmed(o)
+				if err := markFinalConfirmed(o); err != nil {
+					log.Task.Error("finalize TRON order", err)
+				}
 			}
 
 			return
@@ -447,7 +526,9 @@ func (t *tron) tradeConfirmHandle(ctx context.Context) {
 		}
 
 		if info.GetReceipt().GetResult() == core.Transaction_Result_SUCCESS {
-			markFinalConfirmed(o)
+			if err := markFinalConfirmed(o); err != nil {
+				log.Task.Error("finalize TRON order", err)
+			}
 		}
 	}
 

@@ -26,6 +26,7 @@ type transfer struct {
 	Timestamp   time.Time       `json:"timestamp"`
 	TradeType   model.TradeType `json:"trade_type"`
 	BlockNum    int             `json:"block_num"`
+	EventIndex  int64           `json:"event_index"`
 }
 
 type resource struct {
@@ -109,10 +110,15 @@ func orderTransferHandle(ctx context.Context) {
 					}
 
 					// 订单匹配 进入确认流程
-					if err := o.MarkConfirming(t.BlockNum, t.FromAddress, t.TxHash, t.Timestamp, t.Amount); err != nil {
+					bound, _, err := model.BindOrderChainEvent(o.ID, model.ChainEventInput{
+						Network: model.Network(t.Network), TxHash: t.TxHash, EventIndex: t.EventIndex,
+						BlockNum: t.BlockNum, FromAddress: t.FromAddress, Timestamp: t.Timestamp, Amount: t.Amount,
+					})
+					if err != nil {
 						log.Task.Warn("mark order confirming failed:", err)
 						continue
 					}
+					o = bound
 
 					// 从内存 map 中移除已匹配订单，防止同批次其他 transfer 重复匹配
 					orders[key] = append(orderList[:i], orderList[i+1:]...)
@@ -254,9 +260,13 @@ func tronResourceHandle(ctx context.Context) {
 	}
 }
 
-func markFinalConfirmed(o model.Order) {
-	o.SetSuccess()
-	notifyOrderSuccess(o)
+func markFinalConfirmed(o model.Order) error {
+	confirmed, err := model.FinalizeOrderAndEnqueue(o.ID)
+	if err != nil {
+		return err
+	}
+	go notifier.Success(confirmed)
+	return nil
 }
 
 func receivableOrderStatuses() []int {

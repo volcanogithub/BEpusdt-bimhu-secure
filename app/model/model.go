@@ -120,10 +120,15 @@ func initPostgres(dsn string) error {
 }
 
 func AutoMigrate() error {
+	if err := migration.ValidateB1HistoricalConflicts(Db); err != nil {
+		return err
+	}
 	return migration.Run(Db, []any{
 		&Wallet{},
 		&Order{},
 		&NotifyRecord{},
+		&ChainEvent{},
+		&NotificationDelivery{},
 		&Conf{},
 		&Rate{},
 	})

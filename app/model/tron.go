@@ -16,6 +16,7 @@ type TronTransfer struct {
 	Timestamp   time.Time
 	TradeType   TradeType
 	BlockNum    int
+	EventIndex  int64
 }
 
 type TronResource struct {

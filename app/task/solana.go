@@ -367,7 +367,9 @@ func (s *solana) tradeConfirmHandle(ctx context.Context) {
 
 		if data.Get("result.value.0.confirmationStatus").String() == "finalized" {
 
-			markFinalConfirmed(o)
+			if err := markFinalConfirmed(o); err != nil {
+				log.Task.Error("finalize Solana order", err)
+			}
 		}
 	}
 

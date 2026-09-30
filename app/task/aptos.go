@@ -436,7 +436,9 @@ func (a *aptos) tradeConfirmHandle(ctx context.Context) {
 			data.Get("success").Bool() &&
 			data.Get("vm_status").String() == "Executed successfully" {
 
-			markFinalConfirmed(o)
+			if err := markFinalConfirmed(o); err != nil {
+				log.Task.Error("finalize Aptos order", err)
+			}
 		}
 	}
 

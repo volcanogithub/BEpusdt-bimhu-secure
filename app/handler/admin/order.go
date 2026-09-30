@@ -1,13 +1,13 @@
 package admin
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"github.com/v03413/bepusdt/app/handler/base"
 	"github.com/v03413/bepusdt/app/model"
-	"github.com/v03413/bepusdt/app/task/notify"
 	"github.com/v03413/bepusdt/app/utils"
 )
 
@@ -207,25 +207,18 @@ func (Order) Paid(ctx *gin.Context) {
 		return
 	}
 
-	confirmedAt := time.Now()
-	var update = map[string]interface{}{
-		"ref_hash":     req.RefHash,
-		"status":       model.OrderStatusSuccess,
-		"confirmed_at": model.Datetime(confirmedAt),
+	if order.Status != model.OrderStatusConfirming || !strings.EqualFold(order.RefHash, req.RefHash) {
+		base.BadRequest(ctx, "order must already be bound to the same canonical chain event")
+		return
 	}
-
-	err := model.Db.Model(&order).Updates(update).Error
+	confirmed, err := model.FinalizeOrderAndEnqueue(order.ID)
 	if err != nil {
 		base.Error(ctx, err)
 
 		return
 	}
 
-	order.RefHash = req.RefHash
-	order.Status = model.OrderStatusSuccess
-	order.ConfirmedAt = &confirmedAt
-
-	go notify.Handle(order)
+	order = confirmed
 
 	base.Ok(ctx, "操作成功")
 }
@@ -252,7 +245,7 @@ func (Order) ManualNotify(ctx *gin.Context) {
 		return
 	}
 
-	if err := notify.Handle(order); err != nil {
+	if err := model.RequeueOrderNotification(order.ID, time.Now()); err != nil {
 		base.BadRequest(ctx, err.Error())
 
 		return
