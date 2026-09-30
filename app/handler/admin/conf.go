@@ -2,15 +2,15 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/v03413/bepusdt/app/conf"
+	"github.com/v03413/bepusdt/app/credential"
 	"github.com/v03413/bepusdt/app/handler/base"
 	"github.com/v03413/bepusdt/app/model"
 	"github.com/v03413/bepusdt/app/notifier"
-	"github.com/v03413/bepusdt/app/utils"
 )
 
 type Conf struct {
@@ -178,7 +178,15 @@ func (Conf) CheckoutList(ctx *gin.Context) {
 }
 
 func (Conf) ResetApiAuthToken(ctx *gin.Context) {
-	model.SetK(model.ApiAuthToken, strings.ToUpper(utils.Md5String(utils.StrSha256(time.Now().String()))))
+	credentials, err := credential.Generate()
+	if err != nil {
+		base.Error(ctx, fmt.Errorf("API token generation failed: %w", err))
+		return
+	}
+	if err := model.SetSecretValues(map[model.ConfKey]string{model.ApiAuthToken: credentials.APIToken}); err != nil {
+		base.Error(ctx, fmt.Errorf("API token storage failed: %w", err))
+		return
+	}
 
 	base.Ok(ctx, "重置成功")
 }

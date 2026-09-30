@@ -70,7 +70,9 @@ func initSqlite(db string) error {
 	var count int64
 	Db.Model(&Conf{}).Count(&count)
 	if count == 0 {
-		ConfInit()
+		if err := ConfInit(); err != nil {
+			return err
+		}
 	}
 
 	FillDefaultConf()
@@ -110,7 +112,9 @@ func initPostgres(dsn string) error {
 	var count int64
 	Db.Model(&Conf{}).Count(&count)
 	if count == 0 {
-		ConfInit()
+		if err := ConfInit(); err != nil {
+			return err
+		}
 	}
 
 	FillDefaultConf()

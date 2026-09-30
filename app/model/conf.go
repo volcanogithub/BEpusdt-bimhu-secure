@@ -9,10 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
-	"github.com/v03413/bepusdt/app/utils"
+	"github.com/v03413/bepusdt/app/credential"
 	"github.com/v03413/go-cache"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var confCache sync.Map
@@ -84,6 +85,27 @@ func SetK(k ConfKey, v string) {
 	}
 }
 
+// SetSecretValues updates credentials without allowing ORM logs to expand
+// plaintext values. All supplied values are committed atomically.
+func SetSecretValues(values map[ConfKey]string) error {
+	db := Db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)})
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		for key, value := range values {
+			if err := tx.Where("k = ?", key).Delete(&Conf{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&Conf{K: key, V: value}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	RefreshC()
+	return nil
+}
+
 func GetK(k ConfKey) string {
 	var row Conf
 
@@ -144,18 +166,20 @@ func CheckoutUrl(host, id string) string {
 	return fmt.Sprintf("%s/pay/checkout/%s", uri, id)
 }
 
-func ConfInit() {
-	var hash = utils.StrSha256(utils.Md5String(time.Now().String()))
-	var secure = "/" + hash[:10]
-	var token = strings.ToUpper(utils.Md5String(hash[18:28]))
-	var username = hash[10:20]
-	var password = hash[20:30]
-	var encrypt, _ = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+func ConfInit() error {
+	credentials, err := credential.Generate()
+	if err != nil {
+		return fmt.Errorf("generate bootstrap credentials: %w", err)
+	}
+	encrypt, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash bootstrap password: %w", err)
+	}
 	var data = map[ConfKey]string{
-		ApiAuthToken:  token,
-		AdminSecret:   utils.StrSha256(hash),
-		AdminSecure:   secure,
-		AdminUsername: username,
+		ApiAuthToken:  credentials.APIToken,
+		AdminSecret:   credentials.AdminSecret,
+		AdminSecure:   credentials.AdminPath,
+		AdminUsername: credentials.Username,
 		AdminPassword: string(encrypt),
 	}
 	var rows = make([]Conf, 0)
@@ -173,14 +197,12 @@ func ConfInit() {
 	fmt.Println()
 	fmt.Println("┏━━  🔐  后台登录信息 (请立即保存！)")
 	fmt.Println("┃")
-	fmt.Printf("┃    👤  登录账号:  %s\n", username)
-	fmt.Printf("┃    🔑  登录密码:  %s\n", password)
-	fmt.Printf("┃    🛡️   安全入口:  %s\n", secure)
+	fmt.Println("Initial credentials generated; retrieve them from the one-time installation page.")
 	fmt.Println("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println()
 	fmt.Println("┏━━  🔌  API 对接信息")
 	fmt.Println("┃")
-	fmt.Printf("┃    🎫  对接令牌:  %s\n", token)
+	fmt.Println("API credential generated; it will not be written to stdout or logs.")
 	fmt.Println("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println()
 	fmt.Println("⚠️   重要提示:")
@@ -192,15 +214,20 @@ func ConfInit() {
 	fmt.Println("═══════════════════════════════════════════════════════════════════════")
 	fmt.Println()
 
-	Db.Create(&rows)
+	// Never allow ORM SQL/slow-query logging to expand credential values.
+	if err := Db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Create(&rows).Error; err != nil {
+		return fmt.Errorf("store bootstrap configuration: %w", err)
+	}
 
 	// 数据丢到缓存，前台首次访问时会展示这部分初始化信息；明文密码只这一次保存到缓存，不写入数据库
 	cache.Set(string(SystemInstallLock), gin.H{
-		"username": username,
-		"password": password,
-		"secure":   secure,
-		"token":    token,
+		"username": credentials.Username,
+		"password": credentials.Password,
+		"secure":   credentials.AdminPath,
+		"token":    credentials.APIToken,
 	}, -1)
+
+	return nil
 }
 
 func AuthToken() string {

@@ -3,12 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"time"
+	"os"
 
 	"github.com/urfave/cli/v3"
+	"github.com/v03413/bepusdt/app/credential"
 	"github.com/v03413/bepusdt/app/model"
 	"github.com/v03413/bepusdt/app/task"
-	"github.com/v03413/bepusdt/app/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,21 +31,32 @@ var Reset = &cli.Command{
 		return nil
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		hash := utils.Md5String(time.Now().String())
+		credentials, err := credential.Generate()
+		if err != nil {
+			return fmt.Errorf("generate reset credentials: %w", err)
+		}
+		encrypt, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("hash reset password: %w", err)
+		}
 
-		username := hash[8:16]
-		password := hash[0:8]
-		entrance := fmt.Sprintf("/%s", hash[10:20])
-		encrypt, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-		model.SetK(model.AdminSecure, entrance)
-		model.SetK(model.AdminUsername, username)
-		model.SetK(model.AdminPassword, string(encrypt))
-
-		fmt.Println("重置成功，对应信息如下：")
-		fmt.Printf("管理员账号：%s\n管理员密码：%s\n后台管理入口：%s\n", username, password, entrance)
-		fmt.Println("请妥善保存以上信息！")
-		fmt.Println("-------------------------------")
+		handoff := credentials
+		handoff.AdminSecret = ""
+		handoff.APIToken = ""
+		path, err := credential.WriteOneTimeFile(handoff)
+		if err != nil {
+			return err
+		}
+		if err := model.SetSecretValues(map[model.ConfKey]string{
+			model.AdminSecure:   credentials.AdminPath,
+			model.AdminUsername: credentials.Username,
+			model.AdminPassword: string(encrypt),
+		}); err != nil {
+			_ = os.Remove(path)
+			return fmt.Errorf("store reset credentials: %w", err)
+		}
+		fmt.Println("Initial credential generated; plaintext values were not written to stdout or logs.")
+		fmt.Printf("Retrieve the one-time credential file securely, then delete it: %s\n", path)
 
 		return nil
 	},
