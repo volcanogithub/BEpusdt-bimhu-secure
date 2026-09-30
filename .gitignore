@@ -1,0 +1,12 @@
+tmp
+.air.toml
+.DS_Store
+.env
+.idea
+conf.toml
+# Added by goreleaser init:
+dist/
+static/web
+static/secure
+*.log
+AGENTS.md
