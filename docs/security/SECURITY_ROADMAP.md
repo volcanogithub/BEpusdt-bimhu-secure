@@ -10,7 +10,11 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Commit: `security: replace predictable bootstrap credentials with cryptographic random generation`
   - Modified: `app/credential`, `app/model/conf.go`, `app/model/model.go`, `app/cmd/reset.go`, `app/handler/admin/conf.go`, and security documentation.
   - Tests: 1,000-generation uniqueness; deterministic entropy/no-time-input; stdout leak scan; bcrypt compatibility; existing credential preservation; full Go regression.
-- H-2: TRON panic fix
+- H-2: TRON RPC/Panic Reliability Hardening — **PASS (Phase B2-2)**
+  - Commit: `fix: harden tron rpc error handling and prevent scanner panics` (introducing commit of `TRON_ERROR_HANDLING.md`).
+  - Modified: `app/task/tron.go`, `app/task/tron_rpc.go`, `app/utils/tron.go`, regression tests, and security documentation.
+  - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
+  - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
 - H-3: confirmation default policy
 - M-1: SSRF protection
 - M-2: filesystem permission hardening

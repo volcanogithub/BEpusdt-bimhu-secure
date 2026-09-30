@@ -54,6 +54,9 @@ func NewTronGrpcClient(apiNode string, apiKey []string) (*grpc.ClientConn, error
 func tronGridApiKeyUnaryInterceptor(apiKeys []string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{},
 		cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if len(apiKeys) == 0 {
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}
 		i := time.Now().UnixMicro() % int64(len(apiKeys))
 		ctx = addTronGridApiKeyToContext(ctx, apiKeys[i])
 		return invoker(ctx, method, req, reply, cc, opts...)
@@ -63,6 +66,9 @@ func tronGridApiKeyUnaryInterceptor(apiKeys []string) grpc.UnaryClientIntercepto
 func tronGridApiKeyStreamInterceptor(apiKeys []string) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn,
 		method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if len(apiKeys) == 0 {
+			return streamer(ctx, desc, cc, method, opts...)
+		}
 		i := time.Now().UnixMicro() % int64(len(apiKeys))
 		ctx = addTronGridApiKeyToContext(ctx, apiKeys[i])
 		return streamer(ctx, desc, cc, method, opts...)

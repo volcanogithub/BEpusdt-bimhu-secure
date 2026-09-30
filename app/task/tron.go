@@ -41,6 +41,7 @@ type tron struct {
 	retryMu              sync.Mutex
 	retryAttempts        map[int]int
 	retryScheduled       map[int]*time.Timer
+	scanRPC              api.WalletClient // Optional local-test RPC; production uses client().
 }
 
 var tr tron
@@ -88,7 +89,11 @@ func (t *tron) syncBlocksForward(context.Context) {
 		return
 	}
 
-	var now = int(block.BlockHeader.RawData.Number)
+	if err := validateTronBlock(block); err != nil {
+		log.Task.Error("GetNowBlock2", err)
+		return
+	}
+	var now = int(block.GetBlockHeader().GetRawData().GetNumber())
 
 	// 区块高度变化过大，强制丢块重扫
 	if now-t.lastBlockNum > cast.ToInt(model.GetC(model.BlockHeightMaxDiff)) {
@@ -163,18 +168,32 @@ func (t *tron) blockDispatch(ctx context.Context) {
 }
 
 func (t *tron) blockParse(n any) {
-	var num = n.(int)
-
-	var conn *grpc.ClientConn
-	var err error
-	if conn, err = t.client(); err != nil {
-		log.Task.Error("grpc.NewClient", err)
-
+	num, ok := n.(int)
+	if !ok {
+		log.Task.Error("TRON block job has invalid height type")
 		return
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Task.Error("TRON block job panic at height ", num, ": ", recovered)
+			conf.RecordFailure(conf.Tron)
+			t.scheduleBlockRetry(num, 0)
+		}
+	}()
+
+	c := t.scanRPC
+	if c == nil {
+		conn, err := t.client()
+		if err != nil {
+			log.Task.Error("grpc.NewClient", err)
+			t.scheduleBlockRetry(num, 0)
+			return
+		}
+		c = api.NewWalletClient(conn)
 	}
 
 	var ctx, cancel = context.WithTimeout(context.Background(), time.Second*5)
-	bok, err2 := api.NewWalletClient(conn).GetBlockByNum2(ctx, &api.NumberMessage{Num: int64(num)})
+	bok, err2 := c.GetBlockByNum2(ctx, &api.NumberMessage{Num: int64(num)})
 	cancel()
 	if err2 != nil {
 		conf.RecordFailure(conf.Tron)
@@ -184,14 +203,24 @@ func (t *tron) blockParse(n any) {
 		return
 	}
 
-	conf.RecordSuccess(conf.Tron, cast.ToString(num))
-	t.resetBlockRetry(num)
+	if err := validateTronBlock(bok); err != nil {
+		log.Task.Error("GetBlockByNum2", err)
+		conf.RecordFailure(conf.Tron)
+		t.scheduleBlockRetry(num, 0)
+		return
+	}
+	failed := false
 
 	var resources = make([]resource, 0)
 	var transfers = make([]transfer, 0)
 	var timestamp = time.UnixMilli(bok.GetBlockHeader().GetRawData().GetTimestamp())
 	for _, trans := range bok.GetTransactions() {
-		if !trans.Result.Result {
+		if err := validateTronTransaction(trans); err != nil {
+			log.Task.Error("TRON malformed block transaction", err)
+			failed = true
+			continue
+		}
+		if !trans.GetResult().GetResult() {
 
 			continue
 		}
@@ -208,7 +237,8 @@ func (t *tron) blockParse(n any) {
 				var foo = &core.DelegateResourceContract{}
 				err := contract.GetParameter().UnmarshalTo(foo)
 				if err != nil {
-
+					log.Task.Error("TRON contract decode", err)
+					failed = true
 					continue
 				}
 
@@ -228,7 +258,8 @@ func (t *tron) blockParse(n any) {
 				var foo = &core.UnDelegateResourceContract{}
 				err := contract.GetParameter().UnmarshalTo(foo)
 				if err != nil {
-
+					log.Task.Error("TRON contract decode", err)
+					failed = true
 					continue
 				}
 
@@ -248,7 +279,8 @@ func (t *tron) blockParse(n any) {
 				var foo = &core.TransferContract{}
 				err := contract.GetParameter().UnmarshalTo(foo)
 				if err != nil {
-
+					log.Task.Error("TRON contract decode", err)
+					failed = true
 					continue
 				}
 
@@ -348,15 +380,20 @@ func (t *tron) blockParse(n any) {
 
 		if hasTriggerContract {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			info, err := api.NewWalletClient(conn).GetTransactionInfoById(ctx, &api.BytesMessage{Value: trans.Txid})
+			info, err := c.GetTransactionInfoById(ctx, &api.BytesMessage{Value: trans.Txid})
 			cancel()
 			if err != nil {
 				log.Task.Error("GetTransactionInfoById while scanning TRC20 logs", err)
-				t.scheduleBlockRetry(num, 0)
-
-				return
+				failed = true
+				continue
 			}
-			if info.GetReceipt().GetResult() == core.Transaction_Result_SUCCESS {
+			success, err := tronReceiptSucceeded(info)
+			if err != nil {
+				log.Task.Error("TRON receipt", err)
+				failed = true
+				continue
+			}
+			if success {
 				transfers = append(transfers, t.parseTrc20ReceiptLogs(info, id, timestamp, num)...)
 			}
 		}
@@ -368,6 +405,13 @@ func (t *tron) blockParse(n any) {
 	if len(resources) > 0 {
 		resourceQueue.In <- resources
 	}
+	if failed {
+		conf.RecordFailure(conf.Tron)
+		t.scheduleBlockRetry(num, 0)
+		return
+	}
+	conf.RecordSuccess(conf.Tron, cast.ToString(num))
+	t.resetBlockRetry(num)
 
 	log.Task.Info(fmt.Sprintf("区块扫描完成(Tron): %d 成功率：%s", num, conf.GetSuccessRate(conf.Tron)))
 }
@@ -476,72 +520,38 @@ func (t *tron) gasFreePermitTransfer(data []byte) (string, string, *big.Int) {
 func (t *tron) tradeConfirmHandle(ctx context.Context) {
 	var orders = getConfirmingOrders([]model.TradeType{model.TronTrx, model.UsdtTrc20, model.UsdcTrc20})
 
-	var wg sync.WaitGroup
-
-	var handle = func(o model.Order) {
+	var handle = func(o model.Order) error {
 		if model.GetC(model.BlockOffsetConfirm) == "1" {
 			if t.lastBlockNum == 0 || t.lastBlockNum-o.RefBlockNum < t.blockConfirmedOffset {
-				return
+				return nil
 			}
 		}
 
 		conn, err := t.client()
 		if err != nil {
-			log.Task.Error("grpc.NewClient", err)
-
-			return
+			return fmt.Errorf("TRON client: %w", err)
 		}
 
 		var c = api.NewWalletClient(conn)
 
 		idBytes, err := hex.DecodeString(o.RefHash)
+		if err != nil || len(idBytes) != 32 {
+			return fmt.Errorf("invalid TRON transaction hash")
+		}
+
+		success, err := tronConfirmRPC(ctx, c, o, idBytes)
 		if err != nil {
-			log.Task.Error("hex.DecodeString", err)
-
-			return
+			return err
 		}
-
-		if o.TradeType == model.TronTrx {
-			trans, err := c.GetTransactionById(ctx, &api.BytesMessage{Value: idBytes})
-			if err != nil {
-				log.Task.Error("GetTransactionById", err)
-
-				return
-			}
-
-			if trans.GetRet()[0].ContractRet == core.Transaction_Result_SUCCESS {
-				if err := markFinalConfirmed(o); err != nil {
-					log.Task.Error("finalize TRON order", err)
-				}
-			}
-
-			return
+		if success {
+			return markFinalConfirmed(o)
 		}
-
-		info, err := c.GetTransactionInfoById(ctx, &api.BytesMessage{Value: idBytes})
-		if err != nil {
-			log.Task.Error("GetTransactionInfoById", err)
-
-			return
-		}
-
-		if info.GetReceipt().GetResult() == core.Transaction_Result_SUCCESS {
-			if err := markFinalConfirmed(o); err != nil {
-				log.Task.Error("finalize TRON order", err)
-			}
-		}
+		return nil
 	}
 
-	for _, order := range orders {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			handle(order)
-		}()
-	}
-
-	wg.Wait()
+	processTronOrders(orders, handle, func(o model.Order, err error) {
+		log.Task.Error("TRON confirmation order ", o.ID, ": ", err)
+	})
 }
 
 func (t *tron) base58CheckEncode(input []byte) string {
