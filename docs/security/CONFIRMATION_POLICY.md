@@ -1,6 +1,6 @@
 # Phase B2-3: Confirmation Policy Hardening
 
-Status: **PASS only when the Confirmation Policy CI run for the introducing commit succeeds; FAIL otherwise**.
+Status: **FAIL — full acceptance gate blocked by unchanged B1-R SQLite notification concurrency failures; B2-3 targeted tests PASS.**
 Commit: `security: enforce safe blockchain confirmation policy defaults`.
 Run evidence: repository Actions, workflow `confirmation-policy-ci.yml`, source commit shown by the run. This document is not a deployment approval.
 
@@ -59,3 +59,11 @@ New tests cover actual first-install persisted defaults, below/at/above threshol
 A single RPC may lie or return inconsistent data; depth does not replace independent verification, reorganization reconciliation, token/amount/recipient checks, or protocol finality. Block-hash canonicality, dual RPC, L2 settlement, and post-success reorg handling remain separate work. Confirmation delays may exceed order expiry under chain/RPC outages; operators must review reconciliation requirements. Other chain handlers (TON/Solana/APTOS) are not redesigned here.
 
 All BEpusdt statuses, MQTT and HTTP callbacks remain `UNTRUSTED_HINT`. BIMHU Payment Service independently verifies the chain event and decides unique CREDIT. B2-3 adds no CREDIT integration.
+
+## Cloud evidence and blocking regression
+
+Implementation commit: `43a8a4126b673212cd70fca22914bf29025597b8`, parent `85f7c759cf84e26c2ab10c1cce9ab3b846593d61`.
+
+[Cloud run 36797076198](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36797076198) failed twice on the same commit. All six B2-3 tests passed in both attempts. The model package including isolated PostgreSQL 17.11 acceptance passed; full regression failed in `TestB1ConcurrentWorkersSendOnceAtATime`, `app/task/notify/outbox_test.go:76`, from `app/model/notification_delivery.go:76`: attempt 1 `database is locked (5) (SQLITE_BUSY)`, attempt 2 `database is locked (517)`.
+
+B1-R implementation and tests are unchanged. No notification lease or outbox fix is included because the B2-3 scope explicitly prohibits those changes. A subsequent evidence-only CI change allows build and clean-worktree gates to execute despite a failed test step and adds reproduction against the unmodified parent baseline. A green subset or successful build does not make the full gate PASS.

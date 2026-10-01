@@ -16,7 +16,7 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
   - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
 - H-3: Confirmation Policy Hardening — Phase B2-3
-  - Status: PASS only for a successful introducing-commit Confirmation Policy CI run; FAIL otherwise.
+  - Status: **FAIL** — B2-3 targeted tests PASS; full cloud regression blocked by unchanged B1-R SQLite notification concurrency failure (run 36797076198, both attempts).
   - Commit: `security: enforce safe blockchain confirmation policy defaults`.
   - Tests: new-install defaults, TRON depth boundary/RPC gate, invalid/legacy configuration, independent EVM policies, full B1-R/B2 regressions with PostgreSQL and build.
   - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
