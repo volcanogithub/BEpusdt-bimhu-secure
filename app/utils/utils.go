@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-		"os"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,8 +18,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/base58"
 	"github.com/gin-gonic/gin"
- "github.com/v03413/bepusdt/app/security"
 	nid "github.com/matoous/go-nanoid/v2"
+	"github.com/v03413/bepusdt/app/security"
 )
 
 // IsExist 判断文件是否存在
@@ -210,7 +210,7 @@ func StrSha256(str string) string {
 }
 
 func IsAllowedCallbackURL(raw string) bool {
- return security.ValidateURL(raw) == nil
+	return security.ValidateURL(raw) == nil
 }
 
 // GetRequestHost 识别完整的请求主机地址

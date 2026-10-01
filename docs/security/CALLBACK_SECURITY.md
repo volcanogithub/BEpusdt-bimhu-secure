@@ -1,6 +1,10 @@
 # Callback Security — Phase B2-4
 
-Status: NOT RUN — cloud regression pending.
+Status: PASS — cloud run [36827381505](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36827381505), tested source `b28c4b6366ee3fb1c411d67c41762df59f961fd5`.
+Base: `9b4682f9a949f8c34fca4a468157662a151b9719`.
+Implementation: `1048f6d9f0670d795576bc5c85d977d4f440f69c`,
+`security: add callback SSRF protection`. Subsequent test-isolation and
+formatting/acceptance commits are retained without squashing.
 
 ## Boundary
 
@@ -57,3 +61,28 @@ are part of this phase.
 Rollback requires an explicit security decision: reverting re-enables SSRF.
 All states, MQTT and HTTP signals remain UNTRUSTED_HINT. BIMHU independently
 verifies the chain and decides the unique CREDIT. No BIMHU integration changes.
+
+## Cloud acceptance evidence
+
+Ubuntu 24.04.5, Go 1.26.2 linux/amd64, isolated PostgreSQL 17.11.
+Seven TestB24 cases PASS: URL admission; all DNS answers; rebinding at dial;
+redirect and pinned public HTTPS; arbitrary client cannot bypass; failure
+persisted without changing payment success; all durable/legacy/status callbacks.
+Original SQLite worker race 20/20; six B1-R2 SQLite cases 120/120;
+PostgreSQL process-kill/receiver dedupe, transaction/outbox/lease recovery,
+six B2-3 tests, full `go test -p 1 -count=1 ./...`, build and diff/clean gates PASS.
+Build runs `go build ./main` with GOFLAGS=-o=/tmp/bepusdt-b2-3 to avoid the
+existing main directory output-name collision.
+
+Historical first run [36827148082](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36827148082)
+FAIL: `TestDeliverBepusdtStatusUpdateDoesNotHoldDBWhileHTTPIsPending` reported
+`notification request never reached test server`. New SSRF status fixture
+reused the existing order's trade ID and populated its in-process cache key.
+A unique SSRF fixture trade ID corrected test isolation, not payment/cache logic.
+All second-run gates PASS; failure evidence is intentionally preserved.
+
+The CI preservation guard now permits the explicitly scoped callback adapter
+and tests, while still rejecting changes to model/event/outbox DB/lease,
+credential, scanner, confirmation policy, build manifests and UI source.
+ProcessOne body remains byte-for-byte unchanged from the base.
+No local checkout, production wallet, live callback, chain payment or deployment.

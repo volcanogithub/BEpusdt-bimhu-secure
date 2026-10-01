@@ -60,6 +60,6 @@ No publisher/test pipeline redesign or B2-4 work. See CONTAINER_PUBLISHING.md.
 
 ## Phase B2-4: SSRF Protection Hardening
 
-Status: **NOT RUN** — implementation submitted for cloud regression; acceptance pending.
+Status: **PASS** — cloud regression [36827381505](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36827381505), source `b28c4b6366ee3fb1c411d67c41762df59f961fd5`: seven SSRF tests, SQLite/PostgreSQL recovery, B2-3, full regression, build and clean-tree gates PASS. Final formatting/acceptance commit retains the same policy and is revalidated by the same CI. Initial implementation commit: `1048f6d9f0670d795576bc5c85d977d4f440f69c` — `security: add callback SSRF protection`.
 
 Scope: unified HTTPS callback admission and guarded HTTP transport for durable, legacy and status-update callbacks. Event identity, order binding, outbox transactions, lease, credentials, scanner and confirmation policy unchanged. See [CALLBACK_SECURITY.md](CALLBACK_SECURITY.md).

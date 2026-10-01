@@ -14,8 +14,8 @@ import (
 	"github.com/v03413/bepusdt/app"
 	"github.com/v03413/bepusdt/app/log"
 	"github.com/v03413/bepusdt/app/model"
- "github.com/v03413/bepusdt/app/security"
 	"github.com/v03413/bepusdt/app/notifier"
+	"github.com/v03413/bepusdt/app/security"
 	"github.com/v03413/bepusdt/app/utils"
 
 	"github.com/v03413/go-cache"
