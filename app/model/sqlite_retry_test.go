@@ -262,3 +262,27 @@ func TestB1R2PostgresRetryWrapperIsPassThrough(t *testing.T) {
 		}
 	}
 }
+
+func TestB1R2SQLiteWriterAdmissionCancellationAndIndependentPools(t *testing.T) {
+	db, other := r2SQLiteDB(t)
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := sqliteWriteGate(pool)
+	gate <- struct{}{}
+	defer func() { <-gate }()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	calls := 0
+	err = databaseWrite(db.WithContext(ctx), func(*gorm.DB) error { calls++; return nil })
+	if !errors.Is(err, context.DeadlineExceeded) || calls != 0 {
+		t.Fatalf("queued writer ignored cancellation: calls=%d err=%v", calls, err)
+	}
+	// Holding one pool's gate must NOT serialize another independent pool.
+	if err := databaseWrite(other, func(attempt *gorm.DB) error {
+		return attempt.Exec("CREATE TABLE independent_pool_write (id INTEGER)").Error
+	}); err != nil {
+		t.Fatalf("independent pool blocked by process-wide gate: %v", err)
+	}
+}

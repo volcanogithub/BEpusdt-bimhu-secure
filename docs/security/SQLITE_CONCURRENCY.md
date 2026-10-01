@@ -74,7 +74,7 @@ Cloud CI uses an isolated PostgreSQL 17 service and local mock receivers only:
 
 ```bash
 go test -p 1 -count=20 -run '^TestB1ConcurrentWorkersSendOnceAtATime$' -v ./app/task/notify
-go test -p 1 -count=5 -run '^TestB1R2SQLite' -v ./app/model
+go test -p 1 -count=20 -run '^TestB1R2SQLite' -v ./app/model
 go test -p 1 -count=1 -run 'TestB1R.*Postgres' -v ./app/model ./app/task/notify
 go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
 go test -p 1 -count=1 ./...
@@ -132,3 +132,6 @@ Follow-up adds per-pool, cancellable write admission around database-only work,
 retaining finite busy retries between independent pools/processes. The stress
 test still runs 24 producers, 8 workers, two pools with 8 connections each, and
 unchanged assertions. No test workload is reduced.
+
+Final acceptance strengthens (not relaxes) the SQLite repetition gate to 20 runs
+per test and adds queued-writer cancellation/independent-pool admission coverage.

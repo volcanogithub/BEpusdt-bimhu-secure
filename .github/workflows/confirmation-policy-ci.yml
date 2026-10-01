@@ -35,7 +35,7 @@ jobs:
       - name: SQLite original failure repeated 20 times
         run: go test -p 1 -count=20 -run '^TestB1ConcurrentWorkersSendOnceAtATime$' -v ./app/task/notify
       - name: SQLite B1-R2 contention and error regression
-        run: go test -p 1 -count=5 -run '^TestB1R2SQLite' -v ./app/model
+        run: go test -p 1 -count=20 -run '^TestB1R2SQLite' -v ./app/model
       - name: PostgreSQL compatibility and B1-R recovery
         run: go test -p 1 -count=1 -run 'TestB1R.*Postgres' -v ./app/model ./app/task/notify
       - name: B2-3 regression
