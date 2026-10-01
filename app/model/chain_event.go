@@ -48,7 +48,7 @@ type ChainEventInput struct {
 func BindOrderChainEvent(orderID int64, in ChainEventInput) (Order, ChainEvent, error) {
 	var bound Order
 	var event ChainEvent
-	err := Db.Transaction(func(tx *gorm.DB) error {
+	err := databaseTransaction(Db, func(tx *gorm.DB) error {
 		if err := tx.First(&bound, orderID).Error; err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func BindOrderChainEvent(orderID int64, in ChainEventInput) (Order, ChainEvent, 
 
 func FinalizeOrderAndEnqueue(orderID int64) (Order, error) {
 	var order Order
-	err := Db.Transaction(func(tx *gorm.DB) error {
+	err := databaseTransaction(Db, func(tx *gorm.DB) error {
 		if err := tx.First(&order, orderID).Error; err != nil {
 			return err
 		}

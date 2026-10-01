@@ -38,3 +38,12 @@ Container publishing maintenance: **PASS WITH LIMITATIONS** — nightly configur
 - BIMHU Payment Service integration
 
 Phase B3 cannot treat BEpusdt order state, MQTT, or HTTP callback as proof of payment. BIMHU must independently verify network, transaction, event index, token contract, recipient, amount, confirmation policy, and replay uniqueness before CREDIT.
+
+## Phase B1-R2: SQLite Concurrency Stabilization
+
+- Status: **FAIL (cloud acceptance pending)**.
+- Reason: Cloud CI SQLite contention fix.
+- Commit: `fix: stabilize sqlite concurrency under notification workers` (introducing commit of the document below).
+- Scope: private-cache WAL connections; bounded numeric-code busy retry around the original database-only transactions and writes. No canonical identity, outbox, lease or confirmation semantic changes.
+- Tests: original notification race repeated 20 times; five repeated SQLite contention/error suites; PostgreSQL compatibility/recovery; B1-R and B2-1/B2-2/B2-3 full regression, build and clean-tree gate.
+- Evidence, limits and rollback: [SQLITE_CONCURRENCY.md](SQLITE_CONCURRENCY.md).

@@ -54,7 +54,8 @@ func databaseNow(tx *gorm.DB) (time.Time, error) {
 // steal or indefinitely retain a delivery.
 func ClaimNotification(worker string, _ time.Time, lease time.Duration) (NotificationDelivery, error) {
 	var claimed NotificationDelivery
-	err := Db.Transaction(func(tx *gorm.DB) error {
+	err := databaseTransaction(Db, func(tx *gorm.DB) error {
+		claimed = NotificationDelivery{}
 		now, err := databaseNow(tx)
 		if err != nil {
 			return err
@@ -86,7 +87,7 @@ func ClaimNotification(worker string, _ time.Time, lease time.Duration) (Notific
 }
 
 func ExtendNotificationLease(id int64, worker string, lease time.Duration) error {
-	return Db.Transaction(func(tx *gorm.DB) error {
+	return databaseTransaction(Db, func(tx *gorm.DB) error {
 		now, err := databaseNow(tx)
 		if err != nil {
 			return err
@@ -105,37 +106,41 @@ func ExtendNotificationLease(id int64, worker string, lease time.Duration) error
 }
 
 func CompleteNotification(id int64, worker string) error {
-	r := Db.Model(&NotificationDelivery{}).Where("id = ? AND status = ? AND lease_owner = ?", id, NotificationStatusLeased, worker).
-		Updates(map[string]any{"status": NotificationStatusDelivered, "lease_owner": "", "lease_until": nil, "last_error": ""})
-	if r.Error != nil {
-		return r.Error
-	}
-	if r.RowsAffected != 1 {
-		return ErrOrderStateChanged
-	}
-	return nil
+	return databaseWrite(Db, func(attempt *gorm.DB) error {
+		r := attempt.Model(&NotificationDelivery{}).Where("id = ? AND status = ? AND lease_owner = ?", id, NotificationStatusLeased, worker).
+			Updates(map[string]any{"status": NotificationStatusDelivered, "lease_owner": "", "lease_until": nil, "last_error": ""})
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected != 1 {
+			return ErrOrderStateChanged
+		}
+		return nil
+	})
 }
 
 func RetryNotification(id int64, worker, reason string, next time.Time) error {
 	if len(reason) > 512 {
 		reason = reason[:512]
 	}
-	r := Db.Model(&NotificationDelivery{}).Where("id = ? AND status = ? AND lease_owner = ?", id, NotificationStatusLeased, worker).
-		Updates(map[string]any{"status": NotificationStatusRetry, "lease_owner": "", "lease_until": nil, "last_error": reason, "next_attempt_at": next})
-	if r.Error != nil {
-		return r.Error
-	}
-	if r.RowsAffected != 1 {
-		return ErrOrderStateChanged
-	}
-	return nil
+	return databaseWrite(Db, func(attempt *gorm.DB) error {
+		r := attempt.Model(&NotificationDelivery{}).Where("id = ? AND status = ? AND lease_owner = ?", id, NotificationStatusLeased, worker).
+			Updates(map[string]any{"status": NotificationStatusRetry, "lease_owner": "", "lease_until": nil, "last_error": reason, "next_attempt_at": next})
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected != 1 {
+			return ErrOrderStateChanged
+		}
+		return nil
+	})
 }
 
 func RetryNotificationAfter(id int64, worker, reason string, delay time.Duration) error {
 	if len(reason) > 512 {
 		reason = reason[:512]
 	}
-	return Db.Transaction(func(tx *gorm.DB) error {
+	return databaseTransaction(Db, func(tx *gorm.DB) error {
 		now, err := databaseNow(tx)
 		if err != nil {
 			return err
@@ -156,19 +161,21 @@ func FailNotification(id int64, worker, reason string) error {
 	if len(reason) > 512 {
 		reason = reason[:512]
 	}
-	r := Db.Model(&NotificationDelivery{}).Where("id = ? AND status = ? AND lease_owner = ?", id, NotificationStatusLeased, worker).
-		Updates(map[string]any{"status": NotificationStatusDead, "lease_owner": "", "lease_until": nil, "last_error": reason})
-	if r.Error != nil {
-		return r.Error
-	}
-	if r.RowsAffected != 1 {
-		return ErrOrderStateChanged
-	}
-	return nil
+	return databaseWrite(Db, func(attempt *gorm.DB) error {
+		r := attempt.Model(&NotificationDelivery{}).Where("id = ? AND status = ? AND lease_owner = ?", id, NotificationStatusLeased, worker).
+			Updates(map[string]any{"status": NotificationStatusDead, "lease_owner": "", "lease_until": nil, "last_error": reason})
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected != 1 {
+			return ErrOrderStateChanged
+		}
+		return nil
+	})
 }
 
 func RequeueOrderNotification(orderID int64, _ time.Time) error {
-	return Db.Transaction(func(tx *gorm.DB) error {
+	return databaseTransaction(Db, func(tx *gorm.DB) error {
 		now, err := databaseNow(tx)
 		if err != nil {
 			return err

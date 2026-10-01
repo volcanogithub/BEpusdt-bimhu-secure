@@ -32,6 +32,26 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: SQLite original failure repeated 20 times
+        run: go test -p 1 -count=20 -run '^TestB1ConcurrentWorkersSendOnceAtATime
+        run: go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
+      - name: Full regression including B1-R PostgreSQL
+        run: go test -p 1 -count=1 ./...
+      - name: Build
+        if: always()
+        env:
+          GOFLAGS: -o=/tmp/bepusdt-b2-3
+        run: go build ./main
+      - name: Diff and worktree gate
+        if: always()
+        run: |
+          git diff --check
+          test -z "$(git status --porcelain)"
+ -v ./app/task/notify
+      - name: SQLite B1-R2 contention and error regression
+        run: go test -p 1 -count=5 -run '^TestB1R2SQLite' -v ./app/model
+      - name: PostgreSQL compatibility and B1-R recovery
+        run: go test -p 1 -count=1 -run 'TestB1R.*Postgres' -v ./app/model ./app/task/notify
       - name: B2-3 regression
         run: go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
       - name: Full regression including B1-R PostgreSQL
@@ -46,10 +66,3 @@ jobs:
         run: |
           git diff --check
           test -z "$(git status --porcelain)"
-      - name: Unmodified baseline notification reproduction
-        if: always()
-        run: |
-          git fetch --no-tags origin 85f7c759cf84e26c2ab10c1cce9ab3b846593d61
-          git worktree add --detach "$RUNNER_TEMP/b23-baseline" 85f7c759cf84e26c2ab10c1cce9ab3b846593d61
-          cd "$RUNNER_TEMP/b23-baseline"
-          go test -p 1 -count=5 -run '^TestB1ConcurrentWorkersSendOnceAtATime$' -v ./app/task/notify

@@ -38,7 +38,7 @@ func initSqlite(db string) error {
 		return fmt.Errorf("创建数据库目录失败：%w", err)
 	}
 
-	dsn := fmt.Sprintf("%s?cache=shared&mode=rwc"+
+	dsn := fmt.Sprintf("%s?mode=rwc"+
 		"&_pragma=cache_size(-32000)"+ // 32MB 缓存，平衡内存占用
 		"&_pragma=journal_mode(WAL)"+
 		"&_pragma=busy_timeout(8000)"+ // 8 秒超时，兼顾慢速磁盘
