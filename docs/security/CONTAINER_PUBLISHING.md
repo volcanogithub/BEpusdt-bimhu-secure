@@ -1,6 +1,10 @@
 # Container publication — GHCR nightly migration
 
-Status: PASS WITH LIMITATIONS. Static verification only; image publication NOT VERIFIED.
+Status: **PASS WITH DOCUMENTED LIMITATIONS** for current Phase B2-3 publication isolation. See the current isolation and validation sections below.
+
+## Initial GHCR migration record (historical)
+
+Initial status was PASS WITH LIMITATIONS: static verification only; publication had not yet been verified. The later historical #2 run and current isolation evidence supersede that initial assessment.
 
 Registry: `ghcr.io`. Image: `ghcr.io/volcanogithub/bepusdt-bimhu-secure`.
 The owner is supplied by `github.repository_owner` and converted to lowercase in Bash.
@@ -42,7 +46,7 @@ No payment/business code, database schema, API behavior, credential hardening, w
 
 This section supersedes the initial migration's obsolete static-only/default-main
 warnings above; they are retained as historical evidence, not current guidance.
-Status: **FAIL pending current isolation validation**. No production readiness claim.
+Status: **PASS WITH DOCUMENTED LIMITATIONS**. No production readiness claim.
 
 ### Safety snapshot before changes
 
@@ -148,3 +152,66 @@ legacy executable revision rather than claiming old history was erased.
 Validation commands and final CI links are recorded below after execution.
 No business/payment/blockchain/schema/API behavior changes, deployment, wallet
 access, real payment or CREDIT. Signals remain UNTRUSTED_HINT.
+
+### Executed isolation acceptance
+
+Functional commit: `7d13aeb286d94c3af04891f14322442dad6f6089`.
+[Cloud run 36807055783](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36807055783),
+job `110193641336`: **PASS**. Go 1.26.2 / isolated PostgreSQL 17.11.
+Before checkout changes, remote branch/ref snapshots were recorded; the cloud checkout
+was clean, and the final git status/diff gate passed. Remote origin was
+`https://github.com/volcanogithub/BEpusdt-bimhu-secure` for fetch and push.
+
+Commands actually run:
+```bash
+python -m pip install 'PyYAML==6.0.2'
+python scripts/ci/publication_isolation.py
+git diff --check 058b04d692f530209d417520d0896be1f95cf0f8 HEAD
+git diff --exit-code 058b04d692f530209d417520d0896be1f95cf0f8 HEAD -- app main go.mod go.sum dockerfile web static README.md docs/docker docs/1panel docs/bt_panel .goreleaser.yaml
+git remote -v
+git status --porcelain
+go test -p 1 -count=20 -run '^TestB1ConcurrentWorkersSendOnceAtATime$' -v ./app/task/notify
+go test -p 1 -count=20 -run '^TestB1R2SQLite' -v ./app/model
+go test -p 1 -count=1 -run 'TestB1R.*Postgres' -v ./app/model ./app/task/notify
+go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
+go test -p 1 -count=1 ./...
+GOFLAGS=-o=/tmp/bepusdt-b2-3 go build ./main
+git diff --check
+test -z "$(git status --porcelain)"
+```
+
+The audit script uses git ls-tree/show/grep/for-each-ref/tag to inspect all
+workflow definitions, each current remote branch and all matching tracked files.
+Current refs: main, security/b2-hardening-v1.24.2,
+audit/main-publication-isolation-validation. **Tag inventory: empty**.
+All workflow YAML parsed successfully. Current upstream executable category D
+matches: **zero**. Obsolete secret references in workflow definitions: **zero**.
+Repository-wide reference/dependency matches remain intentionally preserved.
+
+| Invariant | Result | Evidence |
+| --- | --- | --- |
+| INV-B2-3-01 | PASS | Current branch workflow targets and GoReleaser configuration contain no upstream container publisher |
+| INV-B2-3-02 | PASS | Forbidden inherited credential-reference scan zero across current workflows |
+| INV-B2-3-03 | PASS | Main only build-only manual Docker workflows; other schedules are issue maintenance, not container publication |
+| INV-B2-3-04 | PASS | Exact repository gate plus lowercased owner-derived BIMHU GHCR image |
+| INV-B2-3-05 | PASS | Exact authorized ref/event expression, pinned checkout SHA, context rejection matrix |
+| INV-B2-3-06 | PASS | GITHUB_TOKEN only; no credential creation/deletion or PAT addition |
+| INV-B2-3-07 | PASS | Original application/blockchain/schema/API source diff empty |
+| INV-B2-3-08 | PASS | PyYAML all workflows plus policy assertions and git diff checks |
+| INV-B2-3-09 | PASS | Historical/import/install references retained with explicit non-hardened-image notice |
+| INV-B2-3-10 | PASS | Original run 36801425308 / source / tags / digest recorded without altering its result |
+
+Original worker race **20/20 PASS**, six SQLite cases **120/120 PASS**;
+PostgreSQL/fault recovery/B2-3 and full Go regression/build **PASS**.
+Current static isolation controls are tested, but this is NOT a live rerun of
+the modified publisher. Docker image rebuild and live GHCR publication in this phase:
+**NOT RUN**; no claim of Docker-daemon unavailability is made (the cloud test runner
+has a daemon). Earlier historical GHCR multiarch build and main PR amd64 build
+are separately identified, not relabelled as current publisher acceptance.
+Package visibility and independent registry-manifest inspection remain **NOT VERIFIED**.
+
+Main is unchanged in this phase at ee1e24d1440ce82065dc247306481ab98bf6db60.
+No new main PR or automatic merge was performed. Security commits are fast-forwards;
+history is not rewritten. This completion is scoped to audited current refs.
+Archived workflow revisions/history and privileged future edits are not made safe
+retroactively; old workflow reruns require review rather than blind reuse.

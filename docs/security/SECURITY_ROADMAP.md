@@ -30,7 +30,7 @@ Each item requires a regression test, configuration migration note, threat/impac
 
 ## Phase B3
 
-Container publishing maintenance: **PASS WITH LIMITATIONS** — nightly configuration migrated to GHCR on the security branch; upstream latest publisher disabled there. Static validation completed; Actions/GHCR publication NOT VERIFIED and default-branch schedule migration pending. See [CONTAINER_PUBLISHING.md](CONTAINER_PUBLISHING.md).
+Container publishing maintenance: **PASS WITH DOCUMENTED LIMITATIONS** — historical GHCR #2 SUCCESS preserved; main upstream Docker publishing disabled via PR #1; authorized security-source/SHA/concurrency controls validated in run 36807055783. Current publisher live rerun/package visibility NOT VERIFIED; no automatic hardened schedule is activated. See [CONTAINER_PUBLISHING.md](CONTAINER_PUBLISHING.md).
 
 - PostgreSQL production deployment validation
 - Dual-RPC verification
@@ -50,7 +50,7 @@ Phase B3 cannot treat BEpusdt order state, MQTT, or HTTP callback as proof of pa
 
 ## Phase B2-3 publication isolation (distinct from H-3 confirmation policy)
 
-Status: **FAIL pending current isolation validation**.
+Status: **PASS WITH DOCUMENTED LIMITATIONS** — cloud run 36807055783; all ten isolation invariants and existing regressions pass. Current publisher live rerun NOT RUN; package visibility NOT VERIFIED.
 Main build-only isolation already merged by PR #1 at ee1e24d1440ce82065dc247306481ab98bf6db60.
 This follow-up restricts GHCR source to the authorized security branch, pins the
 event SHA, serializes nightly publishers and records historic GHCR #2 success.
