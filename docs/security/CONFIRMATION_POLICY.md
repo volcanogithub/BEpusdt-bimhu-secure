@@ -1,6 +1,6 @@
 # Phase B2-3: Confirmation Policy Hardening
 
-Status: **FAIL — full acceptance gate blocked by unchanged B1-R SQLite notification concurrency failures; B2-3 targeted tests PASS.**
+Status: **PASS — final B1-R2 + B2-3 joint cloud revalidation completed.**
 Commit: `security: enforce safe blockchain confirmation policy defaults`.
 Run evidence: repository Actions, workflow `confirmation-policy-ci.yml`, source commit shown by the run. This document is not a deployment approval.
 
@@ -60,10 +60,73 @@ A single RPC may lie or return inconsistent data; depth does not replace indepen
 
 All BEpusdt statuses, MQTT and HTTP callbacks remain `UNTRUSTED_HINT`. BIMHU Payment Service independently verifies the chain event and decides unique CREDIT. B2-3 adds no CREDIT integration.
 
-## Cloud evidence and blocking regression
+## Historical cloud evidence and blocking regression (resolved by B1-R2)
 
 Implementation commit: `43a8a4126b673212cd70fca22914bf29025597b8`, parent `85f7c759cf84e26c2ab10c1cce9ab3b846593d61`.
 
 [Cloud run 36797076198](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36797076198) failed twice on the same commit. All six B2-3 tests passed in both attempts. The model package including isolated PostgreSQL 17.11 acceptance passed; full regression failed in `TestB1ConcurrentWorkersSendOnceAtATime`, `app/task/notify/outbox_test.go:76`, from `app/model/notification_delivery.go:76`: attempt 1 `database is locked (5) (SQLITE_BUSY)`, attempt 2 `database is locked (517)`.
 
-B1-R implementation and tests are unchanged. No notification lease or outbox fix is included because the B2-3 scope explicitly prohibits those changes. A subsequent evidence-only CI change allows build and clean-worktree gates to execute despite a failed test step and adds reproduction against the unmodified parent baseline. A green subset or successful build does not make the full gate PASS.
+At the time of the original B2-3 implementation, B1-R implementation and tests were unchanged. No notification lease or outbox fix was included in that phase because its scope explicitly prohibited those changes. A subsequent evidence-only CI change allows build and clean-worktree gates to execute despite a failed test step and adds reproduction against the unmodified parent baseline. A green subset or successful build does not make the full gate PASS.
+
+## Final B1-R2 + B2-3 joint revalidation (2026-10-01)
+
+This section supersedes the original blocked acceptance status without deleting
+its failure evidence. This PASS refers to **Confirmation Policy Hardening**, not
+the separately documented publication-isolation phase with the same B2-3 label.
+
+- Confirmation implementation: `43a8a4126b673212cd70fca22914bf29025597b8`.
+- B1-R2 final source baseline: `058b04d692f530209d417520d0896be1f95cf0f8`.
+- Final revalidated source commit: `0fd3c6eeee43128346a577aaaf8c36f78ec921d8`.
+- Fresh [run 36807328740, attempt 2](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36807328740/attempts/2),
+  job `110197624511`: **SUCCESS**. It was explicitly rerun for this final acceptance,
+  rather than merely reusing the earlier publication-audit result.
+- Environment: Linux amd64, Go **1.26.2**, isolated PostgreSQL **17.11**.
+- Branch/remote: `security/b2-hardening-v1.24.2`,
+  `https://github.com/volcanogithub/BEpusdt-bimhu-secure`.
+  Cloud checkout clean and remote source/ref synchronized; no local worktree.
+- Only the final acceptance documentation changes in this request. Application,
+  canonical event/index, binding, outbox, lease, credential and TRON RPC source
+  remains identical to the B1-R2 final baseline; confirmation policy unchanged.
+
+Required commands actually executed by the fresh cloud job:
+
+```bash
+go test -p 1 -count=1 ./...
+go build ./main
+go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
+git diff --check
+test -z "$(git status --porcelain)"
+```
+
+Build uses `GOFLAGS=-o=/tmp/bepusdt-b2-3` to avoid creating an executable over
+the existing main/ source directory. This is the requested build command with
+a safe output location, not a different application build.
+
+All six targeted tests **PASS**:
+
+| Test | Covered property |
+| --- | --- |
+| TestB23NewInstallDefaults | New installation persists enabled per-chain protection |
+| TestB23DepthBoundariesAndInvalidConfiguration | Depth boundary and invalid/minimum configuration rejection |
+| TestB23LegacyZeroCannotDisableProtection | Old BlockOffsetConfirm cannot bypass protection |
+| TestB23IndependentEVMPolicies | Independent EVM chain settings |
+| TestB23TronRPCConfirmationGate | TRON below/at threshold, receipt inclusion and RPC failure gates |
+| TestB23EVMFreshHeadValidation | Fresh eth_blockNumber parsing and failure handling |
+
+B1-R2 original concurrent-worker case **20/20 PASS**; six SQLite retry,
+contention/error/cancellation cases **120/120 PASS**. PostgreSQL pass-through,
+migration/uniqueness/concurrent updates, atomic success/outbox rollback,
+database-clock lease competition/recovery, transaction process-kill and HTTP
+receiver deduplication tests **PASS**, not skipped. Full model/notify regressions
+include SQLite outbox and lease tests. Full Go suite, build and clean-tree gates
+**PASS**; no failure required or justified a code change.
+
+Acceptance record commit: the commit introducing this section,
+`docs: finalize B2-3 confirmation policy validation`; its actual final branch
+SHA is recorded in the completion report and the resulting push-triggered Actions
+run. The final documentation-only tree does not alter the validated code.
+
+This is isolated regression acceptance, not production deployment or live-chain
+payment validation. Single-RPC trust, reorg reconciliation, L2 finality, prolonged
+SQLite contention and previously listed risks remain. Status/MQTT/HTTP remain
+UNTRUSTED_HINT; BIMHU independently decides CREDIT. No other B2 work starts.

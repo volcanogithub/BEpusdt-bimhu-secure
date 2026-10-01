@@ -16,9 +16,11 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
   - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
 - H-3: Confirmation Policy Hardening — Phase B2-3
-  - Status: **PASS after B1-R2** — confirmation code unchanged; targeted and full regression PASS in strengthened cloud run 36800692733. Historical SQLite failures remain documented.
-  - Commit: `security: enforce safe blockchain confirmation policy defaults`.
-  - Tests: new-install defaults, TRON depth boundary/RPC gate, invalid/legacy configuration, independent EVM policies, full B1-R/B2 regressions with PostgreSQL and build.
+  - Status: **PASS** — final B1-R2 + B2-3 joint revalidation, run 36807328740 attempt 2, job 110197624511. Confirmation policy unchanged; historical SQLite failures retained.
+  - Implementation commit: `43a8a4126b673212cd70fca22914bf29025597b8`; B1-R2 baseline `058b04d692f530209d417520d0896be1f95cf0f8`; final revalidated source `0fd3c6eeee43128346a577aaaf8c36f78ec921d8`.
+  - Acceptance record: `docs: finalize B2-3 confirmation policy validation` (introducing commit of the final joint-revalidation section).
+  - Commands: `go test -p 1 -count=1 ./...`; `go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task`; `go build ./main` with safe /tmp output; `git diff --check`. All PASS.
+  - Results: six confirmation tests PASS; original worker concurrency 20/20; SQLite regression 120/120; PostgreSQL/outbox/lease/process-kill and full regressions PASS, clean cloud worktree. Go 1.26.2 / PostgreSQL 17.11. No application or workflow changes in this final revalidation.
   - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
 - M-1: SSRF protection
 - M-2: filesystem permission hardening
