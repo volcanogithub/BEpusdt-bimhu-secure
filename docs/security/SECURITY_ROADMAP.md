@@ -26,6 +26,8 @@ Each item requires a regression test, configuration migration note, threat/impac
 
 ## Phase B3
 
+Container publishing maintenance: **PASS WITH LIMITATIONS** — nightly configuration migrated to GHCR on the security branch; upstream latest publisher disabled there. Static validation completed; Actions/GHCR publication NOT VERIFIED and default-branch schedule migration pending. See [CONTAINER_PUBLISHING.md](CONTAINER_PUBLISHING.md).
+
 - PostgreSQL production deployment validation
 - Dual-RPC verification
 - Explicit network profiles

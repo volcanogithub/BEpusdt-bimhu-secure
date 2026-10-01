@@ -4,37 +4,50 @@ on:
     - cron: '0 16 * * *'
   workflow_dispatch:
 env:
-  APP_NAME: bepusdt
-  DOCKER_HUB_USER: v03413
-  DOCKER_HUB_REPO: v03413/bepusdt
+  REGISTRY: ghcr.io
+permissions:
+  contents: read
 jobs:
   build:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: 'main'
+          ref: ${{ github.event_name == 'schedule' && 'security/b2-hardening-v1.24.2' || github.ref }}
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Login to DockerHub
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ env.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_BETA_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate App Version
         run: |
+          IMAGE_OWNER="${REPOSITORY_OWNER,,}"
+          echo "IMAGE=ghcr.io/${IMAGE_OWNER}/bepusdt-bimhu-secure" >> "$GITHUB_ENV"
           echo "APP_VERSION=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
           echo "APP_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
-          echo "VERSION_TAG=$(git describe --tags --abbrev=0)-nightly-$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
+          BASE_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || printf '%s' 'v1.24.2')
+          echo "VERSION_TAG=${BASE_VERSION}-nightly-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_ENV"
+          echo "SOURCE_REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./dockerfile
           platforms: |
             linux/amd64
             linux/arm64
@@ -43,6 +56,9 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ env.VERSION_TAG }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SOURCE_REVISION }}
           tags: |
-            ${{ env.DOCKER_HUB_REPO }}:nightly
-            ${{ env.DOCKER_HUB_REPO }}:nightly-${{ env.APP_DATE }}-${{ env.APP_VERSION }}
+            ${{ env.IMAGE }}:nightly
+            ${{ env.IMAGE }}:nightly-${{ env.APP_DATE }}-${{ env.APP_VERSION }}
