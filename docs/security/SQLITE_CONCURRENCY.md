@@ -1,6 +1,6 @@
 # Phase B1-R2: SQLite Concurrency Stabilization
 
-Status: **FAIL (repeat acceptance exposed contention; stabilization in progress)**.
+Status: **PASS (final strengthened cloud acceptance)**.
 Reason: Cloud CI SQLite contention fix.
 Implementation commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6`, message
 `fix: stabilize sqlite concurrency under notification workers`.
@@ -135,3 +135,30 @@ unchanged assertions. No test workload is reduced.
 
 Final acceptance strengthens (not relaxes) the SQLite repetition gate to 20 runs
 per test and adds queued-writer cancellation/independent-pool admission coverage.
+
+## Final strengthened acceptance
+
+The complete functional change comprises `0f763faf4ea9d215b66e996e2a2487197a670ae6`
+plus writer-admission fix `cbb50808f833965439f5b3c797d2dc258ec4b1cb`.
+The test hardening commit is `49916ee69bcce0b3690adb78f0ee6bc4d05ce6fd`.
+
+- Admission-fix run [36800590615](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36800590615): **PASS**, all gates.
+- Strengthened run [36800692733](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36800692733), job `110174112936`: **PASS**, all gates.
+- Original unchanged concurrent-worker test: **20/20 PASS**.
+- Six SQLite tests (snapshot restart, retry/error code/budget, real SQL rollback,
+  high contention, per-connection timeout, admission cancellation/independent pool):
+  **120/120 PASS**, 20 repetitions each; zero failed cases.
+- PostgreSQL pass-through plus all existing PostgreSQL migration/constraints/
+  concurrent update/rollback/lease/process-kill/HTTP receiver deduplication tests:
+  **PASS**, no PostgreSQL skips.
+- B2-3 targeted tests, full `go test -p 1 -count=1 ./...`, build,
+  `git diff --check` and clean worktree: **PASS**.
+- Go **1.26.2**, PostgreSQL **17.11**, Linux amd64; no schema migration.
+- Per-pool writer admission can reduce SQLite write throughput; it is not a
+  distributed lock and cannot guarantee progress under sustained external writers.
+  Finite-budget exhaustion remains a real error. Production PostgreSQL deployment,
+  Windows-specific resource release and other B2 hardening remain outside this task.
+
+These strengthened results supersede the provisional FAIL after repeat run
+36800357211 without deleting its failure evidence. All changes stayed on the
+security branch; existing source history was not rewritten or squashed.

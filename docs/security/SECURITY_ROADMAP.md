@@ -16,7 +16,7 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
   - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
 - H-3: Confirmation Policy Hardening — Phase B2-3
-  - Status: **FAIL pending B1-R2 stabilization** — confirmation code unchanged; targeted/full regression passed in run 36799257159, but B1-R2 repeated stress gate later failed in run 36800357211. Historical failure evidence is retained.
+  - Status: **PASS after B1-R2** — confirmation code unchanged; targeted and full regression PASS in strengthened cloud run 36800692733. Historical SQLite failures remain documented.
   - Commit: `security: enforce safe blockchain confirmation policy defaults`.
   - Tests: new-install defaults, TRON depth boundary/RPC gate, invalid/legacy configuration, independent EVM policies, full B1-R/B2 regressions with PostgreSQL and build.
   - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
@@ -41,9 +41,9 @@ Phase B3 cannot treat BEpusdt order state, MQTT, or HTTP callback as proof of pa
 
 ## Phase B1-R2: SQLite Concurrency Stabilization
 
-- Status: **FAIL pending repeat acceptance** — run 36799257159 passed, but repeat run 36800357211 exposed high-contention exhaustion; per-pool write admission added without weakening test assertions.
+- Status: **PASS** — strengthened cloud run 36800692733; original worker test 20/20, six SQLite tests 120/120, PostgreSQL/B1-R recovery/full regressions/build/clean-tree PASS. Earlier repeat failure 36800357211 is retained in the evidence document.
 - Reason: Cloud CI SQLite contention fix.
-- Commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6` — `fix: stabilize sqlite concurrency under notification workers`.
-- Scope: private-cache WAL connections; bounded numeric-code busy retry around the original database-only transactions and writes. No canonical identity, outbox, lease or confirmation semantic changes.
-- Tests: original notification race repeated 20 times; five repeated SQLite contention/error suites; PostgreSQL compatibility/recovery; B1-R and B2-1/B2-2/B2-3 full regression, build and clean-tree gate.
+- Commits: `0f763faf4ea9d215b66e996e2a2487197a670ae6` — `fix: stabilize sqlite concurrency under notification workers`; `cbb50808f833965439f5b3c797d2dc258ec4b1cb` — follow-up per-pool writer admission.
+- Scope: private-cache WAL connections; cancellable per-pool write admission and bounded numeric-code busy retry around the original database-only transactions and writes. No canonical identity, outbox, lease or confirmation semantic changes.
+- Tests: original notification race repeated 20 times; 20 repetitions of six SQLite contention/error/admission tests; PostgreSQL compatibility/recovery; B1-R and B2-1/B2-2/B2-3 full regression, build and clean-tree gate.
 - Evidence, limits and rollback: [SQLITE_CONCURRENCY.md](SQLITE_CONCURRENCY.md).
