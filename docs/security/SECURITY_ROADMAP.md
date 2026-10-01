@@ -16,7 +16,7 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
   - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
 - H-3: Confirmation Policy Hardening — Phase B2-3
-  - Status: **PASS after B1-R2** — confirmation code unchanged; targeted and full regression PASS in run 36799257159. Original B2-3 run 36797076198 failed on pre-existing SQLite contention; historical failure evidence is retained in CONFIRMATION_POLICY.md.
+  - Status: **FAIL pending B1-R2 stabilization** — confirmation code unchanged; targeted/full regression passed in run 36799257159, but B1-R2 repeated stress gate later failed in run 36800357211. Historical failure evidence is retained.
   - Commit: `security: enforce safe blockchain confirmation policy defaults`.
   - Tests: new-install defaults, TRON depth boundary/RPC gate, invalid/legacy configuration, independent EVM policies, full B1-R/B2 regressions with PostgreSQL and build.
   - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
@@ -41,7 +41,7 @@ Phase B3 cannot treat BEpusdt order state, MQTT, or HTTP callback as proof of pa
 
 ## Phase B1-R2: SQLite Concurrency Stabilization
 
-- Status: **PASS** — [cloud run 36799257159](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36799257159), Go 1.26.2 / PostgreSQL 17.11.
+- Status: **FAIL pending repeat acceptance** — run 36799257159 passed, but repeat run 36800357211 exposed high-contention exhaustion; per-pool write admission added without weakening test assertions.
 - Reason: Cloud CI SQLite contention fix.
 - Commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6` — `fix: stabilize sqlite concurrency under notification workers`.
 - Scope: private-cache WAL connections; bounded numeric-code busy retry around the original database-only transactions and writes. No canonical identity, outbox, lease or confirmation semantic changes.

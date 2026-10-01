@@ -151,6 +151,7 @@ func Close() {
 		return
 	}
 
+	sqliteWriteGates.Delete(sqlDB)
 	if err := sqlDB.Close(); err != nil {
 
 		_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("数据库资源关闭错误：%s", err.Error()))

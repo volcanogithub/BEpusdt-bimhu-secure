@@ -1,6 +1,6 @@
 # Phase B1-R2: SQLite Concurrency Stabilization
 
-Status: **PASS (GitHub cloud acceptance)**.
+Status: **FAIL (repeat acceptance exposed contention; stabilization in progress)**.
 Reason: Cloud CI SQLite contention fix.
 Implementation commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6`, message
 `fix: stabilize sqlite concurrency under notification workers`.
@@ -44,6 +44,12 @@ References: [SQLite isolation](https://www.sqlite.org/isolation.html),
   earlier caller cancellation is respected. Driver busy handling can delay observing
   cancellation, so this is not a claim of a hard five-second wall-clock guarantee.
   The per-attempt SQLite busy handler also retains its finite eight-second limit.
+- Admit one database-only write operation at a time per SQLite connection pool,
+  through a context-cancellable gate. Pool connections and independent pools remain
+  enabled; independent processes are coordinated only by SQLite locks and bounded
+  retries. This follows SQLite's one-writer limit and does not weaken isolation.
+  Waiting for admission is included in the context budget; no HTTP happens under
+  the gate. Production shutdown retires the pool's gate.
 - Retry the **whole rolled-back transaction** with a fresh snapshot and a fresh
   database-time calculation. Never retry an UPDATE in the failed old snapshot.
   All conditional predicates, affected-row checks, unique constraints and
@@ -112,3 +118,17 @@ the chain and exclusively decides CREDIT. No deployment or chain transaction occ
 - Build and diff/clean-tree gates: **PASS**.
 - Initial run [36799196981](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36799196981) failed workflow syntax validation before any tests; corrected transparently in the CI-only follow-up commit. This was not a passed test run.
 - All operations used the GitHub connector and GitHub Actions. Main unchanged; no deployment, chain transactions, production notifications or BIMHU CREDIT.
+
+### Repeat acceptance failure and follow-up
+
+Final documentation-only tip `da29e6b846c7b082c72015735545908001f4b39f` triggered
+[run 36800357211](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36800357211):
+the original worker test passed 20/20, but one stress repetition exhausted the
+16-attempt budget (only 5/24 outbox rows completed). Other four stress repetitions
+passed. Therefore the earlier green run alone was insufficient and its PASS is
+superseded pending reacceptance. No failed evidence is deleted.
+
+Follow-up adds per-pool, cancellable write admission around database-only work,
+retaining finite busy retries between independent pools/processes. The stress
+test still runs 24 producers, 8 workers, two pools with 8 connections each, and
+unchanged assertions. No test workload is reduced.

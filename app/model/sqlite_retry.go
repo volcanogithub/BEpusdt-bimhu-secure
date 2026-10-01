@@ -2,9 +2,11 @@ package model
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -14,6 +16,16 @@ const (
 	sqliteBusyAttempts = 16
 	sqliteRetryBudget = 5 * time.Second
 )
+
+// SQLite permits one writer. Admission is per connection pool, not a global
+// application lock: independent pools/processes still contend through SQLite.
+var sqliteWriteGates sync.Map // map[*sql.DB]chan struct{}
+
+func sqliteWriteGate(pool *sql.DB) chan struct{} {
+	gate := make(chan struct{}, 1)
+	actual, _ := sqliteWriteGates.LoadOrStore(pool, gate)
+	return actual.(chan struct{})
+}
 
 // Inspect the driver's numeric code, never error message text. LOCKED (6)
 // alone can mean a programming/cursor error; only LOCKED_SHAREDCACHE (262)
@@ -40,6 +52,17 @@ func databaseWrite(db *gorm.DB, operation func(*gorm.DB) error) error {
 	}
 	ctx, cancel := context.WithTimeout(parent, sqliteRetryBudget)
 	defer cancel()
+	pool, err := db.DB()
+	if err != nil {
+		return err
+	}
+	gate := sqliteWriteGate(pool)
+	select {
+	case gate <- struct{}{}:
+		defer func() { <-gate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	var last error
 	for attempt := 0; attempt < sqliteBusyAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {

@@ -34,7 +34,7 @@ func r2SQLiteDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 			t.Fatal(err)
 		}
 		pool.SetMaxOpenConns(8)
-		t.Cleanup(func() { _ = pool.Close() })
+		t.Cleanup(func() { sqliteWriteGates.Delete(pool); _ = pool.Close() })
 		return db
 	}
 	db, other := open(), open()
