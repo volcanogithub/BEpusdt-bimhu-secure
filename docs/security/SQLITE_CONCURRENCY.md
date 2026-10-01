@@ -1,8 +1,8 @@
 # Phase B1-R2: SQLite Concurrency Stabilization
 
-Status: **FAIL (acceptance pending cloud CI)**.
+Status: **PASS (GitHub cloud acceptance)**.
 Reason: Cloud CI SQLite contention fix.
-Implementation commit: the commit introducing this document, message
+Implementation commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6`, message
 `fix: stabilize sqlite concurrency under notification workers`.
 
 ## Root cause and preserved baseline evidence
@@ -97,3 +97,18 @@ subject to separate deployment validation.
 BEpusdt status, MQTT and HTTP remain **UNTRUSTED_HINT**. Delivery remains at-least-once;
 receivers must atomically deduplicate stable event IDs. BIMHU independently verifies
 the chain and exclusively decides CREDIT. No deployment or chain transaction occurs.
+
+## Acceptance evidence (2026-10-01)
+
+- Functional commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6`.
+- Tested commit: `e93e99441da5194a0c52b4344cd588da048ef33d`; the only follow-up change was CI syntax correction, no application source change.
+- [Run 36799257159](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36799257159), job `110169681611`: **PASS**.
+- Linux amd64, Go 1.26.2; isolated PostgreSQL **17.11** (Debian 17.11-1.pgdg13+2).
+- Original concurrent-worker failure: **PASS 20/20** with unchanged test assertions/shared-cache configuration.
+- Five new SQLite tests, each repeated five times: **PASS 25/25**. The 24-producer / 8-worker / independent-pool stress case passed every repetition.
+- New PostgreSQL pass-through test and existing migration, conflict, unique-binding, atomic rollback, lease competition/database clock/recovery, process-kill and receiver deduplication tests: **PASS**, not skipped.
+- Six B2-3 tests: **PASS**.
+- Full `go test -p 1 -count=1 ./...`: **PASS**, including B1-R/B2-1/B2-2/B2-3.
+- Build and diff/clean-tree gates: **PASS**.
+- Initial run [36799196981](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36799196981) failed workflow syntax validation before any tests; corrected transparently in the CI-only follow-up commit. This was not a passed test run.
+- All operations used the GitHub connector and GitHub Actions. Main unchanged; no deployment, chain transactions, production notifications or BIMHU CREDIT.

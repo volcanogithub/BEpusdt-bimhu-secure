@@ -16,7 +16,7 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
   - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
 - H-3: Confirmation Policy Hardening — Phase B2-3
-  - Status: **FAIL** — B2-3 targeted tests PASS; full cloud regression blocked by unchanged B1-R SQLite notification concurrency failure (run 36797076198, both attempts).
+  - Status: **PASS after B1-R2** — confirmation code unchanged; targeted and full regression PASS in run 36799257159. Original B2-3 run 36797076198 failed on pre-existing SQLite contention; historical failure evidence is retained in CONFIRMATION_POLICY.md.
   - Commit: `security: enforce safe blockchain confirmation policy defaults`.
   - Tests: new-install defaults, TRON depth boundary/RPC gate, invalid/legacy configuration, independent EVM policies, full B1-R/B2 regressions with PostgreSQL and build.
   - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
@@ -41,9 +41,9 @@ Phase B3 cannot treat BEpusdt order state, MQTT, or HTTP callback as proof of pa
 
 ## Phase B1-R2: SQLite Concurrency Stabilization
 
-- Status: **FAIL (cloud acceptance pending)**.
+- Status: **PASS** — [cloud run 36799257159](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36799257159), Go 1.26.2 / PostgreSQL 17.11.
 - Reason: Cloud CI SQLite contention fix.
-- Commit: `fix: stabilize sqlite concurrency under notification workers` (introducing commit of the document below).
+- Commit: `0f763faf4ea9d215b66e996e2a2487197a670ae6` — `fix: stabilize sqlite concurrency under notification workers`.
 - Scope: private-cache WAL connections; bounded numeric-code busy retry around the original database-only transactions and writes. No canonical identity, outbox, lease or confirmation semantic changes.
 - Tests: original notification race repeated 20 times; five repeated SQLite contention/error suites; PostgreSQL compatibility/recovery; B1-R and B2-1/B2-2/B2-3 full regression, build and clean-tree gate.
 - Evidence, limits and rollback: [SQLITE_CONCURRENCY.md](SQLITE_CONCURRENCY.md).
