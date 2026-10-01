@@ -7,9 +7,15 @@ env:
   REGISTRY: ghcr.io
 permissions:
   contents: read
+concurrency:
+  group: bimhu-ghcr-nightly
+  cancel-in-progress: false
 jobs:
   build:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >-
+      github.repository == 'volcanogithub/BEpusdt-bimhu-secure' &&
+      github.ref == 'refs/heads/security/b2-hardening-v1.24.2' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       packages: write
@@ -18,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'schedule' && 'security/b2-hardening-v1.24.2' || github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
@@ -59,6 +65,8 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ env.SOURCE_REVISION }}
+            org.opencontainers.image.ref.name=security/b2-hardening-v1.24.2
           tags: |
             ${{ env.IMAGE }}:nightly
             ${{ env.IMAGE }}:nightly-${{ env.APP_DATE }}-${{ env.APP_VERSION }}
+            ${{ env.IMAGE }}:sha-${{ env.SOURCE_REVISION }}

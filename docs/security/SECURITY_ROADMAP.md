@@ -47,3 +47,11 @@ Phase B3 cannot treat BEpusdt order state, MQTT, or HTTP callback as proof of pa
 - Scope: private-cache WAL connections; cancellable per-pool write admission and bounded numeric-code busy retry around the original database-only transactions and writes. No canonical identity, outbox, lease or confirmation semantic changes.
 - Tests: original notification race repeated 20 times; 20 repetitions of six SQLite contention/error/admission tests; PostgreSQL compatibility/recovery; B1-R and B2-1/B2-2/B2-3 full regression, build and clean-tree gate.
 - Evidence, limits and rollback: [SQLITE_CONCURRENCY.md](SQLITE_CONCURRENCY.md).
+
+## Phase B2-3 publication isolation (distinct from H-3 confirmation policy)
+
+Status: **FAIL pending current isolation validation**.
+Main build-only isolation already merged by PR #1 at ee1e24d1440ce82065dc247306481ab98bf6db60.
+This follow-up restricts GHCR source to the authorized security branch, pins the
+event SHA, serializes nightly publishers and records historic GHCR #2 success.
+No publisher/test pipeline redesign or B2-4 work. See CONTAINER_PUBLISHING.md.

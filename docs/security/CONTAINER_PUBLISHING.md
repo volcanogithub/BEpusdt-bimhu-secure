@@ -37,3 +37,114 @@ Important: changes exist on the security branch only. The default `main` branch 
 References: [GitHub GHCR publication](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images), [workflow events/default branch requirements](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows).
 
 No payment/business code, database schema, API behavior, credential hardening, wallet logic, production configuration, or BIMHU CREDIT integration is changed.
+
+## Phase B2-3 publication isolation (2026-10-01)
+
+This section supersedes the initial migration's obsolete static-only/default-main
+warnings above; they are retained as historical evidence, not current guidance.
+Status: **FAIL pending current isolation validation**. No production readiness claim.
+
+### Safety snapshot before changes
+
+Remote repository: `https://github.com/volcanogithub/BEpusdt-bimhu-secure.git`;
+SSH URL `git@github.com:volcanogithub/BEpusdt-bimhu-secure.git`.
+Default branch: `main`, HEAD `ee1e24d1440ce82065dc247306481ab98bf6db60`.
+Security branch HEAD: `058b04d692f530209d417520d0896be1f95cf0f8`.
+Changes use GitHub Git objects and cloud Actions, not a local checkout.
+Local `git status`/`git remote -v`: **NOT RUN — no local worktree**.
+Cloud checkout clean-tree/diff assertions provide the actual worktree evidence;
+remote ref/clone URLs are API-verified, not fabricated shell output.
+
+### Preserve previous GHCR verification
+
+[Run 36801425308, docker-nightly #2](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36801425308)
+was manually triggered on `security/b2-hardening-v1.24.2`, source commit
+`058b04d692f530209d417520d0896be1f95cf0f8`, after the original migration
+`85f7c759cf84e26c2ab10c1cce9ab3b846593d61`. It is **SUCCESS**.
+Job `110176401481`: checkout, QEMU, Buildx, GHCR login, version generation and
+build/push all succeeded, as did post steps. It was already complete and was not cancelled,
+rerun or modified to falsify evidence.
+
+Image: `ghcr.io/volcanogithub/bepusdt-bimhu-secure`.
+Published tags logged: `nightly`, `nightly-20261001-058b04d`.
+Manifest-list digest logged:
+`sha256:63a8d9d5b45c6715b622f49092f19f674d97957d1562933151ff96de5afce92e`.
+The log confirms successful amd64/arm64 build stages, two platform manifests and
+a pushed manifest list. Independent live registry manifest/platform inspection:
+**NOT VERIFIED**. Package visibility: **NOT VERIFIED**.
+Current mutable-tag contents need not still equal this historical digest.
+
+### Default-branch architecture and legacy removal
+
+Main is baseline/reference only. [PR #1](https://github.com/volcanogithub/BEpusdt-bimhu-secure/pull/1)
+previously merged as `ee1e24d1440ce82065dc247306481ab98bf6db60`.
+Its nightly/latest are manual, build-only: no schedule/create publisher, no registry
+login, no inherited credentials, `push:false`, `contents:read`; no `packages:write`.
+Only those two workflow files changed; application and reference docs were preserved.
+YAML/grep/diff/original Go tests/build passed in run 36804441955; existing PR
+Docker amd64 build passed in run 36805636424. This phase does not automatically
+merge any further main changes or migrate main to hardened GHCR tags.
+
+All main workflows and publication configuration, not just nightly, are audited.
+`release.yml` still uses repository-scoped GITHUB_TOKEN/GoReleaser for **this
+repository's GitHub releases**, not upstream containers; no Docker publisher is
+configured in `.goreleaser.yaml`. Broad create triggering remains a limitation.
+Prior incidental run 36804442151 failed because there were no Git tags; no release
+was created. It must not be treated as an isolation mechanism.
+
+GitHub schedule definitions run from the default branch. Main has no GHCR/Docker
+publishing schedule, so the security branch's retained cron is currently **inert**.
+This phase does NOT activate a scheduler or copy hardened publishing to main.
+If a scheduler is later needed, separately design a tested authorized-source
+dispatch/control path; merely copying the security workflow to main would fail its
+strict source-ref gate. No arbitrary main/manual source may update hardened tags.
+
+### Hardened publisher controls
+
+Registry/image remain BIMHU-controlled GHCR. Authentication uses only automatic
+`GITHUB_TOKEN` via `github.actor`; only the build job has `packages:write`.
+No PAT or Docker Hub credentials. Job condition requires the exact repository,
+`refs/heads/security/b2-hardening-v1.24.2`, and dispatch/schedule event.
+Main refs, other branches, tags, forks and push events cannot enter this job.
+Checkout pins `github.sha` rather than resolving a moving branch name.
+
+Fixed workflow concurrency group `bimhu-ghcr-nightly`, cancel-in-progress:false,
+permits only one active run in this group; no different-ref groups can race for
+the shared nightly tag. GitHub may replace an older pending run with a newer one;
+there is no FIFO guarantee. Manual controls in historical workflow revisions are
+not retroactively changed; job cancellation cannot roll back a finished push.
+
+Architectures remain linux/amd64 and linux/arm64. Tags: nightly,
+nightly-YYYYMMDD-<7-char SHA>, and sha-<full source SHA>. OCI labels record repository,
+exact SHA and authorized source branch. Tags are mutable registry names, including
+SHA-named tags on rebuild; **digest pinning** supplies content identity. This is not
+a claim that a tag alone is immutable or that a rebuild is reproducible.
+
+The publisher has no `needs` link to full regression/security acceptance. Existing
+tests are separately exercised by Confirmation Policy CI; building an image is
+not security validation. Adding a meaningful publication gate is recorded for a
+later phase, not silently implemented as a CI redesign.
+
+### Residue classification and secrets
+
+A — historical/reference: README badges/upstream authorship, audit history and
+Go module/import paths (compatibility/provenance). Preserve.
+B — runtime/install dependency: Dockerfile base-image pulls, upstream go-cache/
+tronprotocol dependencies; installation examples in README.md, docs/docker/docker.md,
+docs/1panel/README.md, docs/bt_panel/README.md. Their upstream images **do not contain
+BIMHU hardening** and are not deployment guidance for this fork.
+C — build-only CI: main nightly/latest and pr-check; push:false, no registry auth.
+D — publication/auth: authorized security GHCR and repository-local GitHub release.
+Upstream container publication category D must be zero in the audited current refs.
+
+Obsolete names: DOCKER_HUB_BETA_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN.
+Actual repository secret presence: **NOT VERIFIED**; no secret API access,
+deletion, credential request, PAT creation or secret value output.
+Historical commits/docs remain immutable evidence, not current executable configuration.
+Older non-maintained branches/tags with inherited workflows can require separate
+inventory/cleanup authorization; this audit inventories refs and reports any found
+legacy executable revision rather than claiming old history was erased.
+
+Validation commands and final CI links are recorded below after execution.
+No business/payment/blockchain/schema/API behavior changes, deployment, wallet
+access, real payment or CREDIT. Signals remain UNTRUSTED_HINT.
