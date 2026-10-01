@@ -15,7 +15,11 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Modified: `app/task/tron.go`, `app/task/tron_rpc.go`, `app/utils/tron.go`, regression tests, and security documentation.
   - Tests: nil/empty transaction and receipt; RPC timeout/error; 100-order error/panic isolation; malformed calldata; actual block retry; empty API-key interceptors; full Go regression and build.
   - Evidence and limits: [TRON_ERROR_HANDLING.md](TRON_ERROR_HANDLING.md).
-- H-3: confirmation default policy
+- H-3: Confirmation Policy Hardening — Phase B2-3
+  - Status: PASS only for a successful introducing-commit Confirmation Policy CI run; FAIL otherwise.
+  - Commit: `security: enforce safe blockchain confirmation policy defaults`.
+  - Tests: new-install defaults, TRON depth boundary/RPC gate, invalid/legacy configuration, independent EVM policies, full B1-R/B2 regressions with PostgreSQL and build.
+  - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
 - M-1: SSRF protection
 - M-2: filesystem permission hardening
 - M-3: HTTPS deployment support

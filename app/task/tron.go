@@ -521,12 +521,6 @@ func (t *tron) tradeConfirmHandle(ctx context.Context) {
 	var orders = getConfirmingOrders([]model.TradeType{model.TronTrx, model.UsdtTrc20, model.UsdcTrc20})
 
 	var handle = func(o model.Order) error {
-		if model.GetC(model.BlockOffsetConfirm) == "1" {
-			if t.lastBlockNum == 0 || t.lastBlockNum-o.RefBlockNum < t.blockConfirmedOffset {
-				return nil
-			}
-		}
-
 		conn, err := t.client()
 		if err != nil {
 			return fmt.Errorf("TRON client: %w", err)
@@ -539,7 +533,7 @@ func (t *tron) tradeConfirmHandle(ctx context.Context) {
 			return fmt.Errorf("invalid TRON transaction hash")
 		}
 
-		success, err := tronConfirmRPC(ctx, c, o, idBytes)
+		success, err := tronConfirmWithPolicy(ctx, c, o, idBytes)
 		if err != nil {
 			return err
 		}

@@ -42,7 +42,15 @@ var defaultConf = map[ConfKey]string{
 	RpcGlobalConfigUrlTon:   "https://ton.org/global-config.json",
 	NotifyMaxRetry:          "10",
 	BlockHeightMaxDiff:      "1000",
-	BlockOffsetConfirm:      "0",
+	BlockOffsetConfirm:      "1",
+	ConfirmationDepthTron: "20",
+	ConfirmationDepthEthereum: "12",
+	ConfirmationDepthBsc: "15",
+	ConfirmationDepthPolygon: "40",
+	ConfirmationDepthArbitrum: "40",
+	ConfirmationDepthBase: "40",
+	ConfirmationDepthXlayer: "12",
+	ConfirmationDepthPlasma: "40",
 	PaymentTimeout:          "1200",     // 20分钟
 	PaymentCheckout:         "official", // 官方模板
 	PaymentMatchMode:        string(Classic),

@@ -385,18 +385,16 @@ func (e *evm) tradeConfirmHandle(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	var handle = func(o model.Order) {
-		if model.GetC(model.BlockOffsetConfirm) == "1" {
-			last, ok := chainBlockNum.Load(e.Network)
-			if !ok {
-				return
-			}
-			if cast.ToInt(last)-o.RefBlockNum < e.Block.ConfirmedOffset {
-				return
-			}
-		}
+		rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		head, err := e.confirmationHead(rpcCtx)
+		if err != nil { log.Task.Warn("EVM confirmation head: ", err); return }
+		ready, err := model.ConfirmationDepthReached(e.Network, head, int64(o.RefBlockNum))
+		if err != nil { log.Task.Warn("EVM confirmation policy: ", err); return }
+		if !ready { return }
 
 		post := []byte(fmt.Sprintf(`{"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":["%s"],"id":1}`, o.RefHash))
-		req, err := http.NewRequestWithContext(ctx, "POST", e.rpcEndpoint(), bytes.NewBuffer(post))
+		req, err := http.NewRequestWithContext(rpcCtx, "POST", e.rpcEndpoint(), bytes.NewBuffer(post))
 		if err != nil {
 			log.Task.Warn("evm tradeConfirmHandle Error creating request:", err)
 
@@ -427,6 +425,11 @@ func (e *evm) tradeConfirmHandle(ctx context.Context) {
 			return
 		}
 
+		inclusion, err := parseConfirmationHeight(data.Get("result.blockNumber").String())
+		if err != nil || inclusion != int64(o.RefBlockNum) || !strings.EqualFold(data.Get("result.transactionHash").String(), o.RefHash) {
+			log.Task.Warn("EVM receipt inclusion does not match bound transaction")
+			return
+		}
 		if data.Get("result.status").String() == "0x1" {
 			if err := markFinalConfirmed(o); err != nil {
 				log.Task.Error("finalize EVM order", err)

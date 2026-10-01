@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -25,6 +26,9 @@ var (
 
 func Init() error {
 	model.RefreshC()
+	if err := model.ValidateConfirmationPolicy(os.Stdout); err != nil {
+		return err
+	}
 
 	bscInit()
 	ethInit()

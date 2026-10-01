@@ -1,0 +1,46 @@
+name: Confirmation Policy CI
+on:
+  push:
+    branches: [security/b2-hardening-v1.24.2]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: bepusdt_test
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: bepusdt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bepusdt_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      BEPUSDT_TEST_POSTGRES_DSN: postgres://bepusdt_test:isolated-test-only@localhost:5432/bepusdt_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: B2-3 regression
+        run: go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
+      - name: Full regression including B1-R PostgreSQL
+        run: go test -p 1 -count=1 ./...
+      - name: Build
+        env:
+          GOFLAGS: -o=/tmp/bepusdt-b2-3
+        run: go build ./main
+      - name: Diff and worktree gate
+        run: |
+          git diff --check
+          test -z "$(git status --porcelain)"
