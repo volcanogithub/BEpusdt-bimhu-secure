@@ -1,47 +1,42 @@
-name: docker-latest
+name: docker-latest (baseline build only)
 on:
   workflow_dispatch:
-  create:
-    branches:
-      - main
-    tags:
-      - v*
-env:
-  APP_NAME: bepusdt
-  DOCKERHUB_REPO: v03413/bepusdt
+permissions:
+  contents: read
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout baseline
         uses: actions/checkout@v6
         with:
-          ref: 'main'
+          ref: main
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Generate App Version
+      - name: Generate build version
         run: |
-          echo "APP_VERSION=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
-          echo "VERSION_TAG=$(git describe --tags --abbrev=0)-$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
-      - name: Build and push
+          APP_VERSION=$(git rev-parse --short=7 HEAD)
+          BASE_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || printf '%s' 'v1.24.2')
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+          echo "VERSION_TAG=${BASE_VERSION}-latest-build-${APP_VERSION}" >> "$GITHUB_ENV"
+      - name: Build only - no registry publication
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./dockerfile
           platforms: |
             linux/amd64
             linux/arm64
-          push: true
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ env.VERSION_TAG }}
           tags: |
-            ${{ env.DOCKERHUB_REPO }}:latest
-            ${{ env.DOCKERHUB_REPO }}:${{ env.APP_VERSION }}
+            bepusdt-baseline-build:latest-${{ env.APP_VERSION }}
