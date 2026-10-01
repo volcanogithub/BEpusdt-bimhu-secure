@@ -1,17 +1,18 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
-	"github.com/v03413/bepusdt/app/conf"
+	"github.com/v03413/bepusdt/app/access"
 	"github.com/v03413/bepusdt/app/handler/base"
 	"github.com/v03413/bepusdt/app/model"
-	"github.com/v03413/bepusdt/app/utils"
-	"github.com/v03413/go-cache"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -319,45 +320,46 @@ func (Auth) Menu(ctx *gin.Context) {
 }
 
 func (Auth) Login(ctx *gin.Context) {
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 4096)
 	var req authLoginReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		base.Response(ctx, 400, err.Error())
-
+	bindErr := ctx.ShouldBindJSON(&req)
+	if !access.Default.Attempt(req.Username, access.ClientIP(ctx)) {
+		ctx.Header("Retry-After", "300")
+		ctx.JSON(http.StatusTooManyRequests, gin.H{"code": 429, "msg": "invalid credentials"})
 		return
 	}
-
-	var username = model.GetK(model.AdminUsername)
-	if req.Username != username {
-		base.Response(ctx, 400, "用户名或密码错误")
-
+	// Always check bcrypt, even for an unknown username, to avoid a cheap timing oracle.
+	passwordErr := bcrypt.CompareHashAndPassword([]byte(model.GetK(model.AdminPassword)), []byte(req.Password))
+	usernameHash := sha256.Sum256([]byte(req.Username))
+	expectedHash := sha256.Sum256([]byte(model.GetK(model.AdminUsername)))
+	if bindErr != nil || passwordErr != nil || subtle.ConstantTimeCompare(usernameHash[:], expectedHash[:]) != 1 {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "invalid credentials"})
 		return
 	}
-
-	var password = model.GetK(model.AdminPassword)
-	if bcrypt.CompareHashAndPassword([]byte(password), []byte(req.Password)) != nil {
-		base.Response(ctx, 400, "用户名或密码错误")
-
+	if err := access.RotateSession(ctx); err != nil {
+		base.Error(ctx, err)
 		return
 	}
+	token, err := access.Default.Issue(sessions.Default(ctx).ID())
+	if err != nil {
+		_ = access.InvalidateSession(ctx)
+		base.Error(ctx, err)
+		return
+	}
+	access.Default.Success(req.Username)
 
-	rand, _ := utils.GenerateTradeId()
-
-	var token = utils.StrSha256(rand + ctx.ClientIP())
-
-	cache.Set(conf.AdminTokenK, token, time.Hour*24)
-
-	model.SetK(model.AdminLoginIP, ctx.ClientIP())
+	model.SetK(model.AdminLoginIP, access.ClientIP(ctx))
 	model.SetK(model.AdminLoginAt, cast.ToString(time.Now().Format(time.DateTime)))
 
 	base.Response(ctx, 200, gin.H{"token": token, "types": model.GetAllAlias()})
 }
 
 func (Auth) Logout(ctx *gin.Context) {
-	cache.Set(conf.AdminTokenK, "", -1)
-
-	sess := sessions.Default(ctx)
-	sess.Delete(conf.AdminSecureK)
-	_ = sess.Save()
+	access.Default.Revoke()
+	if err := access.InvalidateSession(ctx); err != nil {
+		base.Error(ctx, err)
+		return
+	}
 
 	base.Response(ctx, 200, "退出成功")
 }
@@ -390,10 +392,21 @@ func (Auth) SetPassword(ctx *gin.Context) {
 		return
 	}
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		base.BadRequest(ctx, "invalid password")
+		return
+	}
 
-	model.SetK(model.AdminPassword, string(hash))
-	cache.Set(conf.AdminTokenK, "", -1)
+	if err := model.SetSecretValues(map[model.ConfKey]string{model.AdminPassword: string(hash)}); err != nil {
+		base.Error(ctx, err)
+		return
+	}
+	access.Default.Revoke()
+	if err := access.InvalidateSession(ctx); err != nil {
+		base.Error(ctx, err)
+		return
+	}
 
 	base.Ok(ctx, "修改成功，请重新登录")
 }

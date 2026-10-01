@@ -25,7 +25,7 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
 - M-1: SSRF protection
 - M-2: filesystem permission hardening
 - M-3: HTTPS deployment support
-- M-5: login rate limiting
+- M-5: login rate limiting — **PASS (Phase B2-5)**
 - M-6: secret-safe logging
 
 Each item requires a regression test, configuration migration note, threat/impact statement, and rollback guidance before merge.
@@ -63,3 +63,13 @@ No publisher/test pipeline redesign or B2-4 work. See CONTAINER_PUBLISHING.md.
 Status: **PASS** — cloud regression [36827381505](https://github.com/volcanogithub/BEpusdt-bimhu-secure/actions/runs/36827381505), source `b28c4b6366ee3fb1c411d67c41762df59f961fd5`: seven SSRF tests, SQLite/PostgreSQL recovery, B2-3, full regression, build and clean-tree gates PASS. Final formatting/acceptance commit retains the same policy and is revalidated by the same CI. Initial implementation commit: `1048f6d9f0670d795576bc5c85d977d4f440f69c` — `security: add callback SSRF protection`.
 
 Scope: unified HTTPS callback admission and guarded HTTP transport for durable, legacy and status-update callbacks. Event identity, order binding, outbox transactions, lease, credentials, scanner and confirmation policy unchanged. See [CALLBACK_SECURITY.md](CALLBACK_SECURITY.md).
+
+## Phase B2-5: Login / Access Control Hardening
+
+Status: **PASS** — GitHub cloud validation on 2026-10-01, parent `d09c6cee11ce08b18042fe08fdf8bff167076a4a`. Commit: `security: harden login and access control protections`.
+
+- Scope: administrator username/IP attempt windows and cooldown; uniform invalid-credential errors; hashed in-memory login tokens bound to a rotated session; absolute expiry; logout/password-change revocation; fail-closed administrator namespaces; direct-peer IP handling and TLS-aware cookie flags.
+- Validation: 15 new top-level Go tests and one frontend interceptor test; full `go test -p 1 -count=1 ./...` PASS (71 top-level tests, 78 passing results including subtests, no failed/skipped tests); PostgreSQL 17.11 recovery/process-kill tests executed; targeted race tests, frontend type check/production build, `go build ./main` with output outside the checkout, and `git diff --check` PASS.
+- Compatibility: no schema changes, existing credentials preserved, payment flow and B1-R/B1-R2/B2-1–B2-4 protected invariants unchanged. Existing clients must renew their administrator login after upgrade.
+- Accepted residual risk: payment `ApiAuthToken` remains the existing plaintext shared signing secret and its signing protocol remains unchanged, per explicit user decision; a compatible encrypted-storage migration needs a separate design. Process-local limiting, proxy/TLS termination and existing memstore/browser-token limitations are documented.
+- Evidence, policies, alternatives and rollback: [ACCESS_CONTROL.md](ACCESS_CONTROL.md). No B2-6/HTTPS deployment, Docker security or B3 work.

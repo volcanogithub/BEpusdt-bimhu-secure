@@ -81,6 +81,13 @@ service.interceptors.response.use(
   function (error: any) {
     // 处理 HTTP 错误状态码
     if (error.response) {
+      if (
+        error.config?.url === "/api/auth/login" &&
+        (error.response.status === 401 || error.response.status === 429)
+      ) {
+        Message.error("invalid credentials");
+        return Promise.reject(error.response.data);
+      }
       if (error.response.status === 403) {
         localStorage.removeItem("user-info");
         const userStore = useUserInfoStore(pinia);
