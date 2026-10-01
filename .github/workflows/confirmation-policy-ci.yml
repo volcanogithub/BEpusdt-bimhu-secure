@@ -33,21 +33,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: SQLite original failure repeated 20 times
-        run: go test -p 1 -count=20 -run '^TestB1ConcurrentWorkersSendOnceAtATime
-        run: go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
-      - name: Full regression including B1-R PostgreSQL
-        run: go test -p 1 -count=1 ./...
-      - name: Build
-        if: always()
-        env:
-          GOFLAGS: -o=/tmp/bepusdt-b2-3
-        run: go build ./main
-      - name: Diff and worktree gate
-        if: always()
-        run: |
-          git diff --check
-          test -z "$(git status --porcelain)"
- -v ./app/task/notify
+        run: go test -p 1 -count=20 -run '^TestB1ConcurrentWorkersSendOnceAtATime$' -v ./app/task/notify
       - name: SQLite B1-R2 contention and error regression
         run: go test -p 1 -count=5 -run '^TestB1R2SQLite' -v ./app/model
       - name: PostgreSQL compatibility and B1-R recovery
