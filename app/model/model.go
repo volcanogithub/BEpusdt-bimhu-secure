@@ -2,18 +2,28 @@ package model
 
 import (
 	"fmt"
+	stdlog "log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/v03413/bepusdt/app/deployment"
+	applog "github.com/v03413/bepusdt/app/log"
 	"github.com/v03413/bepusdt/app/model/migration"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var Db *gorm.DB
 var err error
+
+func safeDatabaseLogger() logger.Interface {
+	return logger.New(stdlog.New(applog.SafeWriter(os.Stderr), "", 0), logger.Config{
+		SlowThreshold: 200 * time.Millisecond, LogLevel: logger.Warn, IgnoreRecordNotFoundError: true,
+	})
+}
 
 type Id struct {
 	ID int64 `gorm:"column:id;primaryKey;autoIncrement;not null;comment:主键ID" json:"id"`
@@ -33,7 +43,7 @@ func Init(db, dsn string) error {
 }
 
 func initSqlite(db string) error {
-	if err := os.MkdirAll(filepath.Dir(db), os.ModePerm); err != nil {
+	if err := deployment.PrivateDirectory(filepath.Dir(db)); err != nil {
 
 		return fmt.Errorf("创建数据库目录失败：%w", err)
 	}
@@ -45,7 +55,7 @@ func initSqlite(db string) error {
 		"&_pragma=synchronous(NORMAL)"+ // NORMAL 模式，性能与安全平衡
 		"&_pragma=wal_autocheckpoint(1500)", // 适中的 checkpoint 频率
 		db)
-	Db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	Db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: safeDatabaseLogger()})
 	if err != nil {
 
 		return fmt.Errorf("数据库初始化失败：%w", err)
@@ -85,7 +95,7 @@ func initPostgres(dsn string) error {
 	// 首次启动可能出现 SLOW SQL 告警，这是由于连接池首次连接预热引起的，后续连接将正常
 
 	var err error
-	Db, err = gorm.Open(postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true}), &gorm.Config{})
+	Db, err = gorm.Open(postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true}), &gorm.Config{Logger: safeDatabaseLogger()})
 	if err != nil {
 
 		return err
@@ -146,7 +156,7 @@ func Close() {
 
 	sqlDB, err := Db.DB()
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("数据库资源句柄获取异常：%s", err.Error()))
+		_, _ = fmt.Fprintln(os.Stderr, applog.Redact(fmt.Sprintf("数据库资源句柄获取异常：%s", err.Error())))
 
 		return
 	}
@@ -154,6 +164,6 @@ func Close() {
 	sqliteWriteGates.Delete(sqlDB)
 	if err := sqlDB.Close(); err != nil {
 
-		_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("数据库资源关闭错误：%s", err.Error()))
+		_, _ = fmt.Fprintln(os.Stderr, applog.Redact(fmt.Sprintf("数据库资源关闭错误：%s", err.Error())))
 	}
 }

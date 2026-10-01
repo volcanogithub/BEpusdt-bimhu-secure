@@ -1,0 +1,27 @@
+services:
+  bepusdt:
+    build:
+      context: ..
+      dockerfile: dockerfile
+    user: "10001:10001"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      BEPUSDT_PRODUCTION: "1"
+      BEPUSDT_PRIVATE_NETWORK: "1"
+      LISTEN: "0.0.0.0:8080"
+      SQLITE: /var/lib/bepusdt/sqlite.db
+      LOG: /var/log/bepusdt
+    volumes:
+      - bepusdt-data:/var/lib/bepusdt
+      - bepusdt-logs:/var/log/bepusdt
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=0700,uid=10001,gid=10001
+volumes:
+  bepusdt-data:
+  bepusdt-logs:

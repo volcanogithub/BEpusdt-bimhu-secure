@@ -23,10 +23,10 @@ Changes must be proposed through pull requests. Do not push directly to `main`.
   - Results: six confirmation tests PASS; original worker concurrency 20/20; SQLite regression 120/120; PostgreSQL/outbox/lease/process-kill and full regressions PASS, clean cloud worktree. Go 1.26.2 / PostgreSQL 17.11. No application or workflow changes in this final revalidation.
   - Evidence and limitations: [CONFIRMATION_POLICY.md](CONFIRMATION_POLICY.md).
 - M-1: SSRF protection
-- M-2: filesystem permission hardening
-- M-3: HTTPS deployment support
+- M-2: filesystem permission hardening — **PASS (Phase B2-6, Linux validation)**
+- M-3: HTTPS deployment support — **PASS (Phase B2-6, validated Nginx baseline)**
 - M-5: login rate limiting — **PASS (Phase B2-5)**
-- M-6: secret-safe logging
+- M-6: secret-safe logging — **PASS (Phase B2-6)**
 
 Each item requires a regression test, configuration migration note, threat/impact statement, and rollback guidance before merge.
 
@@ -73,3 +73,14 @@ Status: **PASS** — GitHub cloud validation on 2026-10-01, parent `d09c6cee11ce
 - Compatibility: no schema changes, existing credentials preserved, payment flow and B1-R/B1-R2/B2-1–B2-4 protected invariants unchanged. Existing clients must renew their administrator login after upgrade.
 - Accepted residual risk: payment `ApiAuthToken` remains the existing plaintext shared signing secret and its signing protocol remains unchanged, per explicit user decision; a compatible encrypted-storage migration needs a separate design. Process-local limiting, proxy/TLS termination and existing memstore/browser-token limitations are documented.
 - Evidence, policies, alternatives and rollback: [ACCESS_CONTROL.md](ACCESS_CONTROL.md). No B2-6/HTTPS deployment, Docker security or B3 work.
+
+## Phase B2-6: Deployment Security Hardening
+
+Status: **PASS** for tested deployment controls; full multi-stage production image build remains **UNVERIFIED** due to Docker Hub anonymous pull rate limiting. Cloud validation on 2026-10-01; parent `d6bc9cd8035c2af53bd571367eb203c4fc17d0e9`. Commit: `security: harden production deployment configuration`.
+
+- HTTPS model: Nginx TLS termination, fixed host/header boundary, Secure cookie rewriting and loopback/private backend; compatible security headers on success and errors. Authentication and payment protocol unchanged.
+- Docker/files/secrets: UID/GID 10001, read-only/drop-capabilities/loopback-only Compose sample, explicit build sources/context exclusions, placeholder-only environment template, private DSN-file support, production missing-credential/listener guards and Linux owner-private file/log/temp policy.
+- Logging: configured-value and sensitive-line redaction, sanitized database diagnostics, route-template-only access logs and generic panic recovery. No payload/lease/outbox semantic changes.
+- Tests: 13 new Go top-level tests plus five actual Nginx tests; full regression PASS (84 top-level Go tests, 95 passing results including subtests, no failed/skipped tests), PostgreSQL recovery executed; race checks, Compose parsing, actual non-root/read-only validation container, build and `git diff --check` PASS.
+- Limits: production Alpine image build, public-domain TLS/renewal and Caddy/Cloudflare rollout not verified. CSP retains inline compatibility; payment secret-at-rest risk remains; Linux permissions, proxy IP-budget sharing and redaction limits are documented.
+- Evidence, configuration, migration and rollback: [DEPLOYMENT_SECURITY.md](DEPLOYMENT_SECURITY.md). No Dual RPC, Nile or BIMHU/B3 work.

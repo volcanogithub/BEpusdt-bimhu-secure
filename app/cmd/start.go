@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 	"context"
 
 	"github.com/v03413/bepusdt/app"
+	"github.com/v03413/bepusdt/app/deployment"
 	"github.com/v03413/bepusdt/app/log"
 	"github.com/v03413/bepusdt/app/model"
 	"github.com/v03413/bepusdt/app/notifier"
@@ -31,12 +33,47 @@ var Start = &cli.Command{
 	Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
 		postgres := c.String("postgres")
 		sqlite := c.String("sqlite")
+		production := os.Getenv("BEPUSDT_PRODUCTION")
+		if err := deployment.ValidateListener(production, os.Getenv("BEPUSDT_PRIVATE_NETWORK"), c.String("listen")); err != nil {
+			return ctx, err
+		}
+		var err error
+		postgres, err = deployment.DatabaseDSN(postgres, os.Getenv("POSTGRESQL_DSN_FILE"))
+		if err != nil {
+			return ctx, err
+		}
+		log.RegisterSecrets(postgres)
+		if production == "1" {
+			if _, err := os.Lstat(".env"); err == nil {
+				if _, err := deployment.ReadPrivateFile(".env"); err != nil {
+					return ctx, err
+				}
+			}
+		}
 		if err := model.Init(sqlite, postgres); err != nil {
 			return ctx, fmt.Errorf("数据库初始化失败 %w", err)
 		}
 
 		if err := log.Init(c.String("log")); err != nil {
 			return ctx, fmt.Errorf("日志初始化失败 %w", err)
+		}
+		if production == "1" {
+			values := make(map[string]string)
+			for _, key := range []model.ConfKey{model.AdminUsername, model.AdminPassword, model.AdminSecret, model.ApiAuthToken} {
+				values[string(key)] = model.GetK(key)
+			}
+			if err := deployment.ValidateSecrets(values); err != nil {
+				return ctx, err
+			}
+			if postgres == "" {
+				for _, path := range []string{sqlite, sqlite + "-wal", sqlite + "-shm"} {
+					if _, err := os.Lstat(path); err == nil {
+						if err := deployment.ProtectFile(path); err != nil {
+							return ctx, err
+						}
+					}
+				}
+			}
 		}
 
 		return ctx, task.Init()
@@ -51,17 +88,21 @@ var Start = &cli.Command{
 }
 
 func start(ctx context.Context, cmd *cli.Command) error {
+	var listen = cmd.String("listen")
+	listener, err := net.Listen("tcp", listen)
+	if err != nil {
+		return fmt.Errorf("backend listen failed: %w", err)
+	}
 	// 开始任务调度
 	task.Start(ctx)
 
 	// 启动 Web 服务器
-	var listen = cmd.String("listen")
-	var srv = &http.Server{Addr: listen, Handler: router.Handler()}
+	var srv = &http.Server{Addr: listen, Handler: router.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 
 	log.Info("web server Start listen", listen)
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("web server error", err)
 		}
 	}()

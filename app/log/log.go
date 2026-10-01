@@ -8,6 +8,7 @@ import (
 
 	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
+	"github.com/v03413/bepusdt/app/deployment"
 )
 
 var (
@@ -19,12 +20,22 @@ var (
 
 func newLogger(file string) (*logrus.Logger, error) {
 	logger := logrus.New()
-	logger.SetFormatter(&logrus.TextFormatter{
+	logger.SetFormatter(safeFormatter{inner: &logrus.TextFormatter{
 		ForceColors:     true,
 		ForceQuote:      true,
 		TimestampFormat: "2006-01-02 15:04:05",
 		FullTimestamp:   true,
-	})
+	}})
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	if err := deployment.ProtectFile(file); err != nil {
+		return nil, err
+	}
 
 	logger.SetLevel(logrus.InfoLevel)
 	output := &lumberjack.Logger{
@@ -42,7 +53,7 @@ func newLogger(file string) (*logrus.Logger, error) {
 }
 
 func Init(dir string) error {
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+	if err := deployment.PrivateDirectory(dir); err != nil {
 		return fmt.Errorf("创建日志目录失败：%w", err)
 	}
 
@@ -92,7 +103,7 @@ func Close() {
 	for _, f := range loggers {
 		if f != nil {
 			if err := f.Close(); err != nil {
-				_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("日志句柄资源关闭错误：%s", err.Error()))
+				_, _ = fmt.Fprintln(os.Stderr, Redact(fmt.Sprintf("日志句柄资源关闭错误：%s", err.Error())))
 			}
 		}
 	}

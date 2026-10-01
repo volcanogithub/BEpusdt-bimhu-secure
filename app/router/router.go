@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/v03413/bepusdt/app/access"
 	"github.com/v03413/bepusdt/app/conf"
-	"github.com/v03413/bepusdt/app/log"
 	"github.com/v03413/bepusdt/app/model"
 )
 
@@ -31,7 +30,7 @@ func Handler() *gin.Engine {
 	})
 
 	engine.Use(sessions.Sessions("session", session))
-	engine.Use(gin.LoggerWithWriter(log.GetWriter()), gin.Recovery())
+	engine.Use(securityHeaders(), accessLogger(), safeRecovery())
 	engine.Use(sessionAuth(), copyright())
 	engine.NoRoute(noRoute())
 	engine.GET("/", func(ctx *gin.Context) {

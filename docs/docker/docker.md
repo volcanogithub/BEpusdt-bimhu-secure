@@ -1,5 +1,9 @@
 # Docker 部署指南
 
+生产部署请使用 [B2-6 部署安全基线](../security/DEPLOYMENT_SECURITY.md) 和
+仓库的 `deploy/compose.production.yml`。下列上游镜像/公开端口快捷命令属于历史开发示例，
+不代表本安全分支的非 root、HTTPS、私有端口和 secret 管理基线。
+
 ## 环境准备
 
 ### 前置要求

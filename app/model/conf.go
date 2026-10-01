@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
 	"github.com/v03413/bepusdt/app/credential"
+	applog "github.com/v03413/bepusdt/app/log"
 	"github.com/v03413/go-cache"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -89,7 +90,7 @@ func SetK(k ConfKey, v string) {
 
 		return nil
 	}); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("设置配置项 %s 错误：%s", k, err.Error()))
+		_, _ = fmt.Fprintln(os.Stderr, applog.Redact(fmt.Sprintf("设置配置项 %s 错误：%s", k, err.Error())))
 	}
 }
 
@@ -123,7 +124,7 @@ func GetK(k ConfKey) string {
 		return row.V
 	}
 
-	_, _ = fmt.Fprintln(os.Stderr, fmt.Sprintf("获取配置项 %s 错误：%s", k, tx.Error.Error()))
+	_, _ = fmt.Fprintln(os.Stderr, applog.Redact(fmt.Sprintf("获取配置项 %s 错误：%s", k, tx.Error.Error())))
 
 	return ""
 }
@@ -161,6 +162,9 @@ func RefreshC() {
 	Db.Find(&rows)
 
 	for _, row := range rows {
+		if applog.SensitiveName(string(row.K)) {
+			applog.RegisterSecrets(row.V)
+		}
 		confCache.Store(row.K, row.V)
 	}
 }
