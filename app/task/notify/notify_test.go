@@ -77,21 +77,21 @@ func TestDeliverBepusdtStatusUpdateDoesNotHoldDBWhileHTTPIsPending(t *testing.T)
 
 	requestStarted := make(chan struct{}, 1)
 	releaseResponse := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestStarted <- struct{}{}
 		<-releaseResponse
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	order := newWaitingOrder(server.URL)
+	order := newWaitingOrder(callbackTestURL(server.URL))
 	if err := db.Create(&order).Error; err != nil {
 		t.Fatalf("seed order: %v", err)
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- deliverBepusdtStatusUpdate(db, &http.Client{Timeout: 2 * time.Second}, "test-auth-token", order)
+		errCh <- deliverBepusdtStatusUpdate(db, callbackTestClient(&http.Client{Timeout: 2 * time.Second}), "test-auth-token", order)
 	}()
 
 	select {

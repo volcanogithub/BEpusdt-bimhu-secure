@@ -40,7 +40,7 @@ jobs:
       - name: Scope and pre-existing source preservation
         run: |
           git diff --check 058b04d692f530209d417520d0896be1f95cf0f8 HEAD
-          git diff --exit-code 058b04d692f530209d417520d0896be1f95cf0f8 HEAD -- app main go.mod go.sum dockerfile web static README.md docs/docker docs/1panel docs/bt_panel .goreleaser.yaml
+          git diff --exit-code 9b4682f9a949f8c34fca4a468157662a151b9719 HEAD -- app/model app/credential app/cmd app/task/tron.go app/task/tron_rpc.go app/task/evm.go app/task/confirmation_policy.go app/utils/tron.go main go.mod go.sum dockerfile web static README.md docs/docker docs/1panel docs/bt_panel .goreleaser.yaml
           git remote -v
           git status --porcelain
       - name: SQLite original failure repeated 20 times
@@ -49,6 +49,8 @@ jobs:
         run: go test -p 1 -count=20 -run '^TestB1R2SQLite' -v ./app/model
       - name: PostgreSQL compatibility and B1-R recovery
         run: go test -p 1 -count=1 -run 'TestB1R.*Postgres' -v ./app/model ./app/task/notify
+      - name: B2-4 SSRF regression
+        run: go test -p 1 -count=1 -run TestB24 -v ./app/security ./app/task/notify
       - name: B2-3 regression
         run: go test -p 1 -count=1 -run TestB23 -v ./app/model ./app/task
       - name: Full regression including B1-R PostgreSQL

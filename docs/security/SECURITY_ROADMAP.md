@@ -57,3 +57,9 @@ Main build-only isolation already merged by PR #1 at ee1e24d1440ce82065dc2473064
 This follow-up restricts GHCR source to the authorized security branch, pins the
 event SHA, serializes nightly publishers and records historic GHCR #2 success.
 No publisher/test pipeline redesign or B2-4 work. See CONTAINER_PUBLISHING.md.
+
+## Phase B2-4: SSRF Protection Hardening
+
+Status: **NOT RUN** — implementation submitted for cloud regression; acceptance pending.
+
+Scope: unified HTTPS callback admission and guarded HTTP transport for durable, legacy and status-update callbacks. Event identity, order binding, outbox transactions, lease, credentials, scanner and confirmation policy unchanged. See [CALLBACK_SECURITY.md](CALLBACK_SECURITY.md).

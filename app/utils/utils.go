@@ -9,8 +9,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/url"
-	"os"
+		"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/base58"
 	"github.com/gin-gonic/gin"
+ "github.com/v03413/bepusdt/app/security"
 	nid "github.com/matoous/go-nanoid/v2"
 )
 
@@ -210,19 +210,7 @@ func StrSha256(str string) string {
 }
 
 func IsAllowedCallbackURL(raw string) bool {
-	// IsAllowedCallbackURL 校验回调/跳转地址格式是否合法
-	// 规则：必须是合法 URL，且 scheme 只允许 http 或 https
-	if raw == "" {
-		return false
-	}
-	u, err := url.ParseRequestURI(raw)
-	if err != nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	return u.Host != ""
+ return security.ValidateURL(raw) == nil
 }
 
 // GetRequestHost 识别完整的请求主机地址

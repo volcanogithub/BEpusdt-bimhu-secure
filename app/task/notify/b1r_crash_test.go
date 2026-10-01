@@ -39,7 +39,7 @@ func TestB1RNotifyFaultHelperProcess(t *testing.T) {
 		_ = os.WriteFile(marker, []byte(stage), 0o600)
 		time.Sleep(time.Hour)
 	}
-	if err := ProcessOne(t.Context(), worker, &http.Client{Timeout: 30 * time.Second}, time.Now(), lease); err != nil {
+	if err := ProcessOne(t.Context(), worker, callbackTestClient(&http.Client{Timeout: 30 * time.Second}), time.Now(), lease); err != nil {
 		os.Exit(32)
 	}
 	_ = os.WriteFile(marker, []byte(stage), 0o600)
@@ -136,7 +136,7 @@ func TestB1RPostgresHTTPProcessKillAndReceiverDedupe(t *testing.T) {
 	var releaseMu sync.Mutex
 	release := make(chan struct{})
 	marker := ""
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		eventID := r.Header.Get("Idempotency-Key")
 		if eventID == "" {
 			t.Error("missing stable event id")
@@ -162,13 +162,13 @@ func TestB1RPostgresHTTPProcessKillAndReceiverDedupe(t *testing.T) {
 
 	// Kill after claim but before HTTP. The expired lease must be recovered and
 	// the durable pending notification must still be delivered.
-	before := queueB1RPostgresNotification(t, db, "http-before", server.URL)
+	before := queueB1RPostgresNotification(t, db, "http-before", callbackTestURL(server.URL))
 	marker = filepath.Join(t.TempDir(), "http-before.ready")
 	cmd := startNotifyHelper(t, "http_before", marker)
 	waitMarker(t, cmd, marker)
 	killHelper(t, cmd)
 	time.Sleep(250 * time.Millisecond)
-	if err := ProcessOne(t.Context(), "restart-before", server.Client(), time.Now().Add(24*time.Hour), 150*time.Millisecond); err != nil {
+	if err := ProcessOne(t.Context(), "restart-before", callbackTestClient(server.Client()), time.Now().Add(24*time.Hour), 150*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 	var beforeRow model.NotificationDelivery
@@ -180,7 +180,7 @@ func TestB1RPostgresHTTPProcessKillAndReceiverDedupe(t *testing.T) {
 	// Kill after the receiver atomically records the event but before it sends
 	// the response. Retry is required and receiver-side unique event_id dedupes it.
 	duringCalls := calls.Load()
-	during := queueB1RPostgresNotification(t, db, "http-during", server.URL)
+	during := queueB1RPostgresNotification(t, db, "http-during", callbackTestURL(server.URL))
 	marker = filepath.Join(t.TempDir(), "http-during.ready")
 	blockFirst.Store(true)
 	cmd = startNotifyHelper(t, "http_during", marker)
@@ -191,7 +191,7 @@ func TestB1RPostgresHTTPProcessKillAndReceiverDedupe(t *testing.T) {
 	release = make(chan struct{})
 	releaseMu.Unlock()
 	time.Sleep(250 * time.Millisecond)
-	if err := ProcessOne(t.Context(), "restart-during", server.Client(), time.Now().Add(-24*time.Hour), 150*time.Millisecond); err != nil {
+	if err := ProcessOne(t.Context(), "restart-during", callbackTestClient(server.Client()), time.Now().Add(-24*time.Hour), 150*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 	var receiverCount int64
@@ -210,12 +210,12 @@ func TestB1RPostgresHTTPProcessKillAndReceiverDedupe(t *testing.T) {
 
 	// Kill after HTTP success and the delivered update. Restart must not send it.
 	afterCalls := calls.Load()
-	after := queueB1RPostgresNotification(t, db, "http-after", server.URL)
+	after := queueB1RPostgresNotification(t, db, "http-after", callbackTestURL(server.URL))
 	marker = filepath.Join(t.TempDir(), "http-after.ready")
 	cmd = startNotifyHelper(t, "http_after", marker)
 	waitMarker(t, cmd, marker)
 	killHelper(t, cmd)
-	if err := ProcessOne(t.Context(), "restart-after", server.Client(), time.Now(), 150*time.Millisecond); !errors.Is(err, model.ErrNoNotificationDue) {
+	if err := ProcessOne(t.Context(), "restart-after", callbackTestClient(server.Client()), time.Now(), 150*time.Millisecond); !errors.Is(err, model.ErrNoNotificationDue) {
 		t.Fatalf("delivered notification was reclaimed: %v", err)
 	}
 	if calls.Load() != afterCalls+1 {

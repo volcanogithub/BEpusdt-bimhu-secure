@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cast"
 	"github.com/v03413/bepusdt/app/model"
+ "github.com/v03413/bepusdt/app/security"
 	"github.com/v03413/bepusdt/app/utils"
 )
 
@@ -91,6 +92,7 @@ func ProcessOne(ctx context.Context, worker string, client *http.Client, now tim
 }
 
 func deliverStableEvent(ctx context.Context, client *http.Client, order model.Order, eventID string) error {
+ client = security.Client(client)
 	if order.ApiType == model.OrderApiTypeEpay {
 		notifyURL := fmt.Sprintf("%s?%s&event_id=%s", order.NotifyUrl, order.BuildNotifyParams(), url.QueryEscape(eventID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, notifyURL, nil)

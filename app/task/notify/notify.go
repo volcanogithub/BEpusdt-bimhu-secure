@@ -14,6 +14,7 @@ import (
 	"github.com/v03413/bepusdt/app"
 	"github.com/v03413/bepusdt/app/log"
 	"github.com/v03413/bepusdt/app/model"
+ "github.com/v03413/bepusdt/app/security"
 	"github.com/v03413/bepusdt/app/notifier"
 	"github.com/v03413/bepusdt/app/utils"
 
@@ -59,7 +60,7 @@ func Handle(order model.Order) error {
 }
 
 func epay(ctx context.Context, order model.Order) error {
-	var client = http.Client{Timeout: time.Second * 5}
+	var client = security.Client(nil)
 	var notifyUrl = fmt.Sprintf("%s?%s", order.NotifyUrl, order.BuildNotifyParams())
 
 	postReq, err2 := http.NewRequestWithContext(ctx, "GET", notifyUrl, nil)
@@ -128,7 +129,7 @@ func epusdt(ctx context.Context, order model.Order) error {
 
 	// 再次序列化
 	jsonBody, err = json.Marshal(body)
-	var client = http.Client{Timeout: time.Second * 5}
+	var client = security.Client(nil)
 	var postReq, err2 = http.NewRequestWithContext(ctx, "POST", order.NotifyUrl, strings.NewReader(string(jsonBody)))
 	if err2 != nil {
 		markNotifyFail(order, err2.Error())
@@ -226,7 +227,7 @@ func deliverBepusdtStatusUpdate(db *gorm.DB, client *http.Client, authToken stri
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Powered-By", "https://github.com/v03413/BEpusdt")
-	resp, err := client.Do(req)
+	resp, err := security.Client(client).Do(req)
 	if err != nil {
 		return err
 	}

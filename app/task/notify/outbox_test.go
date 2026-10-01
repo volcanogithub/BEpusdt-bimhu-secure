@@ -54,7 +54,7 @@ func queuedOrder(t *testing.T, db *gorm.DB, url string) model.NotificationDelive
 func TestB1ConcurrentWorkersSendOnceAtATime(t *testing.T) {
 	db := outboxDB(t)
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		if r.Header.Get("Idempotency-Key") != "tron:tx:0" {
 			t.Errorf("missing stable idempotency key")
@@ -63,7 +63,7 @@ func TestB1ConcurrentWorkersSendOnceAtATime(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
-	queuedOrder(t, db, server.URL)
+	queuedOrder(t, db, callbackTestURL(server.URL))
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for _, worker := range []string{"worker-a", "worker-b"} {
@@ -71,7 +71,7 @@ func TestB1ConcurrentWorkersSendOnceAtATime(t *testing.T) {
 		go func(worker string) {
 			defer wg.Done()
 			<-start
-			err := ProcessOne(context.Background(), worker, server.Client(), time.Now(), time.Second)
+			err := ProcessOne(context.Background(), worker, callbackTestClient(server.Client()), time.Now(), time.Second)
 			if err != nil && !errors.Is(err, model.ErrNoNotificationDue) {
 				t.Errorf("worker: %v", err)
 			}
@@ -88,7 +88,7 @@ func TestB1TimeoutRetriesWithStableEventID(t *testing.T) {
 	db := outboxDB(t)
 	var idsMu sync.Mutex
 	var ids []string
-	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	slow := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idsMu.Lock()
 		ids = append(ids, r.Header.Get("Idempotency-Key"))
 		idsMu.Unlock()
@@ -96,8 +96,8 @@ func TestB1TimeoutRetriesWithStableEventID(t *testing.T) {
 		w.WriteHeader(200)
 	}))
 	defer slow.Close()
-	n := queuedOrder(t, db, slow.URL)
-	client := &http.Client{Timeout: 30 * time.Millisecond}
+	n := queuedOrder(t, db, callbackTestURL(slow.URL))
+	client := callbackTestClient(&http.Client{Timeout: 30 * time.Millisecond})
 	if err := ProcessOne(context.Background(), "worker-a", client, time.Now(), time.Second); err == nil {
 		t.Fatal("expected timeout")
 	}
@@ -106,16 +106,16 @@ func TestB1TimeoutRetriesWithStableEventID(t *testing.T) {
 	if retry.Status != model.NotificationStatusRetry {
 		t.Fatalf("want retry, got %s", retry.Status)
 	}
-	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fast := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idsMu.Lock()
 		ids = append(ids, r.Header.Get("Idempotency-Key"))
 		idsMu.Unlock()
 		w.WriteHeader(200)
 	}))
 	defer fast.Close()
-	db.Model(&model.Order{}).Where("id = ?", retry.OrderID).Update("notify_url", fast.URL)
+	db.Model(&model.Order{}).Where("id = ?", retry.OrderID).Update("notify_url", callbackTestURL(fast.URL))
 	db.Model(&model.NotificationDelivery{}).Where("id = ?", n.ID).Update("next_attempt_at", time.Now().Add(-time.Second))
-	if err := ProcessOne(context.Background(), "worker-b", fast.Client(), time.Now(), time.Second); err != nil {
+	if err := ProcessOne(context.Background(), "worker-b", callbackTestClient(fast.Client()), time.Now(), time.Second); err != nil {
 		t.Fatal(err)
 	}
 	idsMu.Lock()
@@ -161,7 +161,7 @@ func TestB1RSlowHTTPBeyondLeaseIsRenewed(t *testing.T) {
 	var inFlight atomic.Int32
 	var maxInFlight atomic.Int32
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		current := inFlight.Add(1)
 		defer inFlight.Add(-1)
@@ -175,14 +175,14 @@ func TestB1RSlowHTTPBeyondLeaseIsRenewed(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
-	queuedOrder(t, db, server.URL)
+	queuedOrder(t, db, callbackTestURL(server.URL))
 
 	firstDone := make(chan error, 1)
 	go func() {
-		firstDone <- ProcessOne(context.Background(), "slow-worker", server.Client(), time.Now().Add(-time.Hour), 75*time.Millisecond)
+		firstDone <- ProcessOne(context.Background(), "slow-worker", callbackTestClient(server.Client()), time.Now().Add(-time.Hour), 75*time.Millisecond)
 	}()
 	time.Sleep(150 * time.Millisecond)
-	err := ProcessOne(context.Background(), "competing-worker", server.Client(), time.Now().Add(time.Hour), 75*time.Millisecond)
+	err := ProcessOne(context.Background(), "competing-worker", callbackTestClient(server.Client()), time.Now().Add(time.Hour), 75*time.Millisecond)
 	if err != nil && !errors.Is(err, model.ErrNoNotificationDue) {
 		t.Fatal(err)
 	}
@@ -196,11 +196,11 @@ func TestB1RSlowHTTPBeyondLeaseIsRenewed(t *testing.T) {
 
 func TestB1RetryBudgetStopsFurtherClaims(t *testing.T) {
 	db := outboxDB(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) }))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) }))
 	defer server.Close()
-	n := queuedOrder(t, db, server.URL)
+	n := queuedOrder(t, db, callbackTestURL(server.URL))
 	db.Model(&model.NotificationDelivery{}).Where("id = ?", n.ID).Update("attempt_count", 9)
-	if err := ProcessOne(context.Background(), "worker", server.Client(), time.Now(), time.Second); err == nil {
+	if err := ProcessOne(context.Background(), "worker", callbackTestClient(server.Client()), time.Now(), time.Second); err == nil {
 		t.Fatal("expected delivery failure")
 	}
 	var got model.NotificationDelivery
