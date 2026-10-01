@@ -55,6 +55,7 @@ func TestB24RedirectBlockedAndDialPinned(t *testing.T) {
  server:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   requests.Add(1)
   if !strings.HasPrefix(r.Host,"safe.example:") {t.Error("Host not preserved")}
+  if r.URL.Path == "/allowed" { w.WriteHeader(http.StatusOK); return }
   w.Header().Set("Location","http://127.0.0.1/metadata");w.WriteHeader(http.StatusFound)
  }))
  defer server.Close()
@@ -69,6 +70,9 @@ func TestB24RedirectBlockedAndDialPinned(t *testing.T) {
  resp,err:=c.Get("https://safe.example:"+port+"/callback")
  if err!=nil {t.Fatal(err)};defer resp.Body.Close()
  if resp.StatusCode!=302 || requests.Load()!=1 || dials.Load()!=1 {t.Fatal("redirect followed")}
+ accepted,err:=c.Get("https://safe.example:"+port+"/allowed")
+ if err!=nil {t.Fatal(err)};defer accepted.Body.Close()
+ if accepted.StatusCode!=200 || requests.Load()!=2 || dials.Load()!=2 {t.Fatal("public HTTPS callback failed")}
 }
 func TestB24ArbitraryClientCannotBypassPolicy(t *testing.T) {
  c:=Client(&http.Client{Transport:http.DefaultTransport})

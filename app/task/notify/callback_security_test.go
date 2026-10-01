@@ -6,7 +6,6 @@ import (
  "net"
  "net/http"
  "net/netip"
- "net/url"
  "strings"
  "testing"
  "time"
@@ -50,12 +49,13 @@ func TestB24AllCallbackPathsRejectPrivateDestination(t *testing.T) {
  db := outboxDB(t)
  initNotifyTestLog(t)
  o := newWaitingOrder("https://127.0.0.1/callback")
+ o.TradeId = "ssrf-rejected-status"
  if err := db.Create(&o).Error; err != nil { t.Fatal(err) }
  for _, kind := range []string{model.OrderApiTypeEpay, model.OrderApiTypeEpusdt} {
   o.ApiType = kind
   if err := deliverStableEvent(t.Context(), nil, o, "stable-id"); err == nil { t.Fatal("durable callback allowed private URL") }
  }
  if err := deliverBepusdtStatusUpdate(db, nil, "test-token", o); err == nil { t.Fatal("status callback allowed private URL") }
- // URL parsing is deliberately not a network operation.
- if _, err := url.Parse(o.NotifyUrl); err != nil { t.Fatal(err) }
+ if err := epay(t.Context(), o); err == nil { t.Fatal("legacy Epay allowed private URL") }
+ if err := epusdt(t.Context(), o); err == nil { t.Fatal("legacy Epusdt allowed private URL") }
 }

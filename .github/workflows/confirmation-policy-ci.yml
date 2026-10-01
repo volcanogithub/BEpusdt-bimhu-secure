@@ -33,6 +33,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Read-only gofmt evidence
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          paths = ["app/security/url_validator.go","app/utils/utils.go","app/task/notify/notify.go","app/task/notify/outbox.go","app/task/notify/callback_security_test.go","app/task/notify/notify_test.go","app/task/notify/outbox_test.go","app/task/notify/b1r_crash_test.go","app/security/url_validator_test.go"]
+          print('B24_FORMATTED=' + json.dumps({p: subprocess.check_output(['gofmt', p], text=True) for p in paths}))
+          PY
       - name: Publication YAML validator
         run: python -m pip install 'PyYAML==6.0.2'
       - name: All workflow publication isolation and residue audit
