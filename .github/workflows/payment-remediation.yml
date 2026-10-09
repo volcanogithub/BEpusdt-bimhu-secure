@@ -33,6 +33,7 @@ jobs:
           node-version: '25.2.1'
       - name: Pin reported fixed dependencies
         run: |
+          gofmt -w app/task/tron_https_observer.go app/task/tron_https_observer_test.go app/task/tron.go
           go get golang.org/x/crypto@v0.55.0 google.golang.org/grpc@v1.83.2
           go mod tidy
           sed -i 's/golang:1.26.2-alpine3.23/golang:1.26.9-alpine3.23/' dockerfile
@@ -50,7 +51,7 @@ jobs:
               with urllib.request.urlopen(q) as r:return json.load(r)
           branch='deployment/payment-remediation-20261009'
           sha=None
-          for name in ['go.mod','go.sum','dockerfile']:
+          for name in ['go.mod','go.sum','dockerfile','app/task/tron.go','app/task/tron_https_observer.go','app/task/tron_https_observer_test.go']:
               old=api('/contents/'+name+'?ref='+branch)
               r=api('/contents/'+name,{'branch':branch,'sha':old['sha'],'message':'Fix pinned payment image dependency vulnerabilities: '+name,'content':base64.b64encode(pathlib.Path(name).read_bytes()).decode()})
               sha=r['commit']['sha']
@@ -67,7 +68,12 @@ jobs:
           mkdir -p static/secure
           cp -a web/dist/. static/secure/
       - name: Full isolated Go regression
-        run: go test -p 1 -count=1 ./...
+        run: |
+          set +e
+          go test -json -p 1 -count=1 ./... > go-test.stdout.raw 2> go-test.stderr.raw
+          result=$?
+          printf '%s\n' "$result" > go-test.exitcode
+          exit "$result"
       - name: Build and scan
         run: |
           docker build --label org.opencontainers.image.revision="$SOURCE_REVISION" --label org.opencontainers.image.base.revision=21c6a2d9137b135926098d65dfe3bacfcfde818b --build-arg VERSION="bimhu-secure-$SOURCE_REVISION" -t bimhu-bepusdt:remediated -f dockerfile .
@@ -83,6 +89,12 @@ jobs:
         with:
           name: bepusdt-payment-remediation
           path: |
+            go-test.stdout.raw
+            go-test.stderr.raw
+            go-test.exitcode
+            app/task/tron_https_observer.go
+            app/task/tron_https_observer_test.go
+            app/task/tron.go
             remediation.patch
             REMEDIATION_SHA256SUMS
             go.mod
