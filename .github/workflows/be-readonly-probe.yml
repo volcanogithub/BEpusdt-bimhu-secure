@@ -1,0 +1,32 @@
+name: Build authorized BE HTTPS readonly probe
+on:
+  push:
+    branches: [deployment/be-readonly-probe-20261009]
+    paths: [.github/workflows/be-readonly-probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.9'
+      - name: Build isolated test executable without server credentials
+        run: |
+          set -eu
+          gofmt -w app/task/authorized_https_readonly_probe_test.go
+          CGO_ENABLED=0 go test -c -o be-https-readonly-tests ./app/task
+          printf '%s\n' "$GITHUB_SHA" > probe-source-revision.txt
+          sha256sum be-https-readonly-tests probe-source-revision.txt app/task/authorized_https_readonly_probe_test.go > PROBE_SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: be-https-readonly-probe
+          retention-days: 14
+          path: |
+            be-https-readonly-tests
+            probe-source-revision.txt
+            app/task/authorized_https_readonly_probe_test.go
+            PROBE_SHA256SUMS
