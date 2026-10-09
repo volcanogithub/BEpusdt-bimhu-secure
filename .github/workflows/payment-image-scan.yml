@@ -24,6 +24,21 @@ jobs:
           docker pull aquasec/trivy:0.75.0
           docker image inspect --format '{{json .RepoDigests}}' aquasec/trivy:0.75.0 > scanner-identity.json
           docker run --rm --memory 1g -v "$PWD:/work" aquasec/trivy:0.75.0 image --input /work/image.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format json --output /work/trivy-report.json
+      - name: Sanitized vulnerability summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,collections
+          p=pathlib.Path('trivy-report.json')
+          if not p.exists():
+              print('SCAN_REPORT_MISSING')
+          else:
+              o=json.loads(p.read_text())
+              rows=[v for r in o.get('Results',[]) for v in r.get('Vulnerabilities',[])]
+              print('VULNERABILITY_COUNTS='+json.dumps(dict(collections.Counter(v.get('Severity') for v in rows))))
+              for v in rows:
+                  print('FINDING='+json.dumps({k:v.get(k) for k in ('VulnerabilityID','PkgName','InstalledVersion','FixedVersion','Severity')}))
+          PY
       - name: Evidence manifest
         if: always()
         run: |
