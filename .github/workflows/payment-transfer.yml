@@ -19,7 +19,7 @@ jobs:
           import os,json,urllib.request,urllib.error,pathlib,base64,subprocess,hashlib,hmac,tempfile
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self,*args,**kwargs):return None
-          endpoint='https://api.github.com/repos/volcanogithub/BEpusdt-bimhu-secure/actions/artifacts/11609558304/zip'
+          endpoint='https://api.github.com/repos/volcanogithub/BEpusdt-bimhu-secure/actions/artifacts/11611201667/zip'
           q=urllib.request.Request(endpoint,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
           try:
               urllib.request.build_opener(NoRedirect).open(q)
@@ -37,5 +37,5 @@ jobs:
               c=subprocess.run(['openssl','enc','-aes-256-cbc','-salt','-pbkdf2','-iter','200000','-pass','file:'+str(p/'password.private')],input=url.encode(),capture_output=True,check=True).stdout
               k=subprocess.run(['openssl','pkeyutl','-encrypt','-pubin','-inkey',str(p/'public.pem'),'-pkeyopt','rsa_padding_mode:oaep','-pkeyopt','rsa_oaep_md:sha256'],input=password,capture_output=True,check=True).stdout
               mac=hmac.new(hashlib.sha256(password+b'artifact-transfer-mac').digest(),c,hashlib.sha256).hexdigest()
-              print('ARTIFACT_TRANSFER_ENVELOPE='+json.dumps({'artifact_id':11609558304,'encrypted_password':base64.b64encode(k).decode(),'ciphertext':base64.b64encode(c).decode(),'mac':mac}))
+              print('ARTIFACT_TRANSFER_ENVELOPE='+json.dumps({'artifact_id':11611201667,'encrypted_password':base64.b64encode(k).decode(),'ciphertext':base64.b64encode(c).decode(),'mac':mac}))
           PY
