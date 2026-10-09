@@ -525,12 +525,16 @@ func (t *tron) tradeConfirmHandle(ctx context.Context) {
 		var c api.WalletClient
 		if os.Getenv("BEPUSDT_TRON_HTTPS_CONFIG_FILE") != "" {
 			httpClient, err := newTronHTTPSClient()
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			defer httpClient.close()
 			c = httpClient
 		} else {
 			conn, err := t.client()
-			if err != nil { return fmt.Errorf("TRON client: %w", err) }
+			if err != nil {
+				return fmt.Errorf("TRON client: %w", err)
+			}
 			c = api.NewWalletClient(conn)
 		}
 
@@ -565,7 +569,9 @@ func (t *tron) base58CheckEncode(input []byte) string {
 
 func (t *tron) syncBreak() bool {
 	// HTTPS mode uses the bounded recipient indexer; never send provider keys over plaintext gRPC.
-	if os.Getenv("BEPUSDT_TRON_HTTPS_CONFIG_FILE") != "" { return true }
+	if os.Getenv("BEPUSDT_TRON_HTTPS_CONFIG_FILE") != "" {
+		return true
+	}
 	if t.blockScanQueue.Len() >= blockQueueLimit {
 		log.Task.Warn("tron 同步阻塞，当前区块消费堆积数量：", t.blockScanQueue.Len())
 
