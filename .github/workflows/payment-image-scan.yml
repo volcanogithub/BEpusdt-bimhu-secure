@@ -1,0 +1,40 @@
+name: Scan pinned BEpusdt cloud image
+on:
+  push:
+    branches: [deployment/payment-scan-20261009]
+    paths: [.github/workflows/payment-image-scan.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bepusdt-secure-21c6a2d-image
+          run-id: 37915727515
+          repository: volcanogithub/BEpusdt-bimhu-secure
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify delivered image and scan
+        run: |
+          sha256sum -c SHA256SUMS
+          gzip -dc bepusdt-image.tar.gz > image.tar
+          docker pull aquasec/trivy:0.75.0
+          docker image inspect --format '{{json .RepoDigests}}' aquasec/trivy:0.75.0 > scanner-identity.json
+          docker run --rm --memory 1g -v "$PWD:/work" aquasec/trivy:0.75.0 image --input /work/image.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format json --output /work/trivy-report.json
+      - name: Evidence manifest
+        if: always()
+        run: |
+          test ! -f trivy-report.json || sha256sum trivy-report.json scanner-identity.json > SCAN_SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bepusdt-secure-21c6a2d-scan
+          path: |
+            trivy-report.json
+            scanner-identity.json
+            SCAN_SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
