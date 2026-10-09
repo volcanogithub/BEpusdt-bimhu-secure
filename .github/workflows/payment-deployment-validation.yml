@@ -1,0 +1,48 @@
+name: Pinned BEpusdt payment deployment validation
+on:
+  push:
+    branches: [deployment/payment-20261009]
+permissions:
+  contents: read
+jobs:
+  validate-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: bepusdt_test
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: bepusdt_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bepusdt_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      BEPUSDT_TEST_POSTGRES_DSN: postgres://bepusdt_test:isolated-ci-only@127.0.0.1:5432/bepusdt_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 21c6a2d9137b135926098d65dfe3bacfcfde818b
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+      - name: Isolated security regression
+        run: go test -p 1 -count=1 ./...
+      - name: Build pinned production image
+        run: |
+          docker build --label org.opencontainers.image.revision=21c6a2d9137b135926098d65dfe3bacfcfde818b --build-arg VERSION=bimhu-secure-21c6a2d -t bimhu-bepusdt:21c6a2d -f dockerfile .
+          test "$(docker image inspect --format '{{.Config.User}}' bimhu-bepusdt:21c6a2d)" = '10001:10001'
+          docker image inspect --format '{{.Id}} {{.Config.User}}' bimhu-bepusdt:21c6a2d > image-identity.txt
+          docker save bimhu-bepusdt:21c6a2d | gzip > bepusdt-image.tar.gz
+          sha256sum bepusdt-image.tar.gz image-identity.txt > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bepusdt-secure-21c6a2d-image
+          path: |
+            bepusdt-image.tar.gz
+            image-identity.txt
+            SHA256SUMS
+          retention-days: 7
