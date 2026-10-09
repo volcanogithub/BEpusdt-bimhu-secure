@@ -1,4 +1,5 @@
 name: Remediate and validate BEpusdt payment image
+# HTTPS observer rebuild after native protobuf decoder review
 on:
   push:
     branches: [deployment/payment-remediation-20261009]
