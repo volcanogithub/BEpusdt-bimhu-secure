@@ -29,6 +29,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25.2.1'
+      - name: Build real secure frontend required by router tests
+        run: |
+          npm install -g pnpm@10
+          cd web
+          pnpm install --frozen-lockfile --shamefully-hoist
+          pnpm run build:prod
+          cd ..
+          mkdir -p static/secure
+          cp -a web/dist/. static/secure/
       - name: Isolated security regression
         run: go test -p 1 -count=1 ./...
       - name: Build pinned production image
