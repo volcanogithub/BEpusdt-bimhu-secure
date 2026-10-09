@@ -1,0 +1,95 @@
+name: Remediate and validate BEpusdt payment image
+on:
+  push:
+    branches: [deployment/payment-remediation-20261009]
+    paths: [.github/workflows/payment-remediation.yml]
+permissions:
+  contents: write
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: bepusdt_test
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: bepusdt_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U bepusdt_test" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      GOTOOLCHAIN: local
+      BEPUSDT_TEST_POSTGRES_DSN: postgres://bepusdt_test:isolated-ci-only@127.0.0.1:5432/bepusdt_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25.2.1'
+      - name: Pin reported fixed dependencies
+        run: |
+          go get golang.org/x/crypto@v0.55.0 golang.org/x/net@v0.56.0 golang.org/x/text@v0.39.0 google.golang.org/grpc@v1.83.2
+          go mod tidy
+          sed -i 's/golang:1.26.2-alpine3.23/golang:1.26.9-alpine3.23/' dockerfile
+          git diff -- go.mod go.sum dockerfile > remediation.patch
+          sha256sum go.mod go.sum dockerfile remediation.patch > REMEDIATION_SHA256SUMS
+      - name: Preserve generated fixed source on this independent branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request,pathlib,base64
+          root='https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']
+          def api(path,body=None):
+              q=urllib.request.Request(root+path,data=None if body is None else json.dumps(body).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'},method='GET' if body is None else 'PUT')
+              with urllib.request.urlopen(q) as r:return json.load(r)
+          branch='deployment/payment-remediation-20261009'
+          sha=None
+          for name in ['go.mod','go.sum','dockerfile']:
+              old=api('/contents/'+name+'?ref='+branch)
+              r=api('/contents/'+name,{'branch':branch,'sha':old['sha'],'message':'Fix pinned payment image dependency vulnerabilities: '+name,'content':base64.b64encode(pathlib.Path(name).read_bytes()).decode()})
+              sha=r['commit']['sha']
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('SOURCE_REVISION='+sha+'\n')
+          print('REMEDIATED_SOURCE_COMMIT='+sha)
+          PY
+      - name: Build real frontend
+        run: |
+          npm install -g pnpm@10
+          cd web
+          pnpm install --frozen-lockfile --shamefully-hoist
+          pnpm run build:prod
+          cd ..
+          mkdir -p static/secure
+          cp -a web/dist/. static/secure/
+      - name: Full isolated Go regression
+        run: go test -p 1 -count=1 ./...
+      - name: Build and scan
+        run: |
+          docker build --label org.opencontainers.image.revision="$SOURCE_REVISION" --label org.opencontainers.image.base.revision=21c6a2d9137b135926098d65dfe3bacfcfde818b --build-arg VERSION="bimhu-secure-$SOURCE_REVISION" -t bimhu-bepusdt:remediated -f dockerfile .
+          test "$(docker image inspect --format '{{.Config.User}}' bimhu-bepusdt:remediated)" = '10001:10001'
+          docker save bimhu-bepusdt:remediated > image.tar
+          docker pull aquasec/trivy:0.75.0
+          docker run --rm --memory 1g -v "$PWD:/work" aquasec/trivy:0.75.0 image --input /work/image.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format json --output /work/trivy-report.json
+          gzip image.tar
+          docker image inspect --format '{{.Id}} {{.Config.User}} {{index .Config.Labels "org.opencontainers.image.revision"}}' bimhu-bepusdt:remediated > image-identity.txt
+          sha256sum image.tar.gz image-identity.txt trivy-report.json > IMAGE_SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bepusdt-payment-remediation
+          path: |
+            remediation.patch
+            REMEDIATION_SHA256SUMS
+            go.mod
+            go.sum
+            dockerfile
+            trivy-report.json
+            image.tar.gz
+            image-identity.txt
+            IMAGE_SHA256SUMS
+          retention-days: 14
