@@ -216,15 +216,16 @@ func (c *tronHTTPSClient) GetTransactionById(context.Context, *api.BytesMessage,
 }
 
 func init() { Register(Task{Duration: 15 * time.Second, Callback: tronHTTPSObserve}) }
+
 // Expiration closes checkout but does not invalidate a canonical payment made
 // within its original window. Keep unbound orders in the existing bounded tail.
 func httpsObserverOrders(ctx context.Context, cutoff time.Time) ([]model.Order, error) {
- var orders []model.Order
- e := model.Db.WithContext(ctx).Where("status IN (?) AND trade_type = ? AND address = ?", []int{model.OrderStatusWaiting, model.OrderStatusExpired}, model.UsdtTrc20, httpsObserverRecipient).
-  Where("expired_at > ?", cutoff).
-  Where("NOT EXISTS (SELECT 1 FROM bep_chain_event WHERE bep_chain_event.order_id = bep_order.id)").
-  Order("created_at asc").Limit(100).Find(&orders).Error
- return orders, e
+	var orders []model.Order
+	e := model.Db.WithContext(ctx).Where("status IN (?) AND trade_type = ? AND address = ?", []int{model.OrderStatusWaiting, model.OrderStatusExpired}, model.UsdtTrc20, httpsObserverRecipient).
+		Where("expired_at > ?", cutoff).
+		Where("NOT EXISTS (SELECT 1 FROM bep_chain_event WHERE bep_chain_event.order_id = bep_order.id)").
+		Order("created_at asc").Limit(100).Find(&orders).Error
+	return orders, e
 }
 func tronHTTPSObserve(ctx context.Context) {
 	if os.Getenv("BEPUSDT_TRON_HTTPS_CONFIG_FILE") == "" || !httpsObserverMu.TryLock() {
