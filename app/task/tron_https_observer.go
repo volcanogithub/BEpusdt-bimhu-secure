@@ -222,7 +222,7 @@ func httpsObserverOrders(ctx context.Context, cutoff time.Time) ([]model.Order, 
  var orders []model.Order
  e := model.Db.WithContext(ctx).Where("status IN (?) AND trade_type = ? AND address = ?", []int{model.OrderStatusWaiting, model.OrderStatusExpired}, model.UsdtTrc20, httpsObserverRecipient).
   Where("expired_at > ?", cutoff).
-  Where("NOT EXISTS (SELECT 1 FROM chain_events WHERE chain_events.order_id = orders.id)").
+  Where("NOT EXISTS (SELECT 1 FROM bep_chain_event WHERE bep_chain_event.order_id = bep_order.id)").
   Order("created_at asc").Limit(100).Find(&orders).Error
  return orders, e
 }
