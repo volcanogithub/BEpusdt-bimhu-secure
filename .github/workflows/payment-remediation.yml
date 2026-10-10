@@ -2,7 +2,7 @@ name: Remediate and validate BEpusdt payment image
 # HTTPS observer rebuild after native protobuf and Datetime interface review
 on:
   push:
-    branches: [deployment/payment-remediation-20261009]
+    branches: [deployment/cancel-observer-tail-20261010]
     paths: [.github/workflows/payment-remediation.yml]
 permissions:
   contents: write
@@ -34,7 +34,7 @@ jobs:
           node-version: '25.2.1'
       - name: Pin reported fixed dependencies
         run: |
-          gofmt -w app/task/tron_https_observer.go app/task/tron_https_observer_test.go app/task/tron.go
+          gofmt -w app/task/transfer.go app/task/cancel_observer_tail_test.go app/task/tron_https_observer.go app/task/tron_https_observer_test.go app/task/tron.go
           go get golang.org/x/crypto@v0.55.0 google.golang.org/grpc@v1.83.2
           go mod tidy
           sed -i 's/golang:1.26.2-alpine3.23/golang:1.26.9-alpine3.23/' dockerfile
@@ -50,9 +50,9 @@ jobs:
           def api(path,body=None):
               q=urllib.request.Request(root+path,data=None if body is None else json.dumps(body).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'},method='GET' if body is None else 'PUT')
               with urllib.request.urlopen(q) as r:return json.load(r)
-          branch='deployment/payment-remediation-20261009'
+          branch='deployment/cancel-observer-tail-20261010'
           sha=None
-          for name in ['go.mod','go.sum','dockerfile','app/task/tron.go','app/task/tron_https_observer.go','app/task/tron_https_observer_test.go']:
+          for name in ['go.mod','go.sum','dockerfile','app/task/tron.go','app/task/tron_https_observer.go','app/task/tron_https_observer_test.go','app/task/transfer.go','app/task/cancel_observer_tail_test.go']:
               old=api('/contents/'+name+'?ref='+branch)
               r=api('/contents/'+name,{'branch':branch,'sha':old['sha'],'message':'Fix pinned payment image dependency vulnerabilities: '+name,'content':base64.b64encode(pathlib.Path(name).read_bytes()).decode()})
               sha=r['commit']['sha']
@@ -96,6 +96,8 @@ jobs:
             app/task/tron_https_observer.go
             app/task/tron_https_observer_test.go
             app/task/tron.go
+            app/task/transfer.go
+            app/task/cancel_observer_tail_test.go
             remediation.patch
             REMEDIATION_SHA256SUMS
             go.mod
