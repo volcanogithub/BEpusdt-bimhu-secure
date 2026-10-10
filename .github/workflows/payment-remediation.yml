@@ -35,7 +35,7 @@ jobs:
       - name: Pin reported fixed dependencies
         run: |
           gofmt -w app/task/transfer.go app/task/cancel_observer_tail_test.go app/task/tron_https_observer.go app/task/tron_https_observer_test.go app/task/tron.go
-          go get golang.org/x/crypto@v0.55.0 google.golang.org/grpc@v1.83.2
+          go get golang.org/x/crypto@v0.55.0 golang.org/x/net@v0.60.0 google.golang.org/grpc@v1.83.2
           go mod tidy
           sed -i 's/golang:1.26.2-alpine3.23/golang:1.26.9-alpine3.23/' dockerfile
           git diff -- go.mod go.sum dockerfile > remediation.patch
