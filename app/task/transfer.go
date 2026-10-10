@@ -159,7 +159,7 @@ func orderTransferMatch(o model.Order, t transfer) bool {
 }
 
 func withinCanonicalOrderWindow(o model.Order, timestamp time.Time) bool {
- return o.CreatedAt != nil && timestamp.UnixMilli() >= o.CreatedAt.Time().UnixMilli() && timestamp.UnixMilli() < o.ExpiredAt.UnixMilli()
+	return o.CreatedAt != nil && timestamp.UnixMilli() >= o.CreatedAt.Time().UnixMilli() && timestamp.UnixMilli() < o.ExpiredAt.UnixMilli()
 }
 
 func orderMatchAddress(o model.Order) string {
