@@ -151,11 +151,15 @@ func orderTransferMatch(o model.Order, t transfer) bool {
 	if !o.AddressLocked && !amountMatch(t.Amount, o.Amount, string(o.TradeType)) {
 		return false
 	}
-	if !o.CreatedAt.Before(t.Timestamp) || !o.ExpiredAt.After(t.Timestamp) {
+	if !withinCanonicalOrderWindow(o, t.Timestamp) {
 		return false
 	}
 
 	return true
+}
+
+func withinCanonicalOrderWindow(o model.Order, timestamp time.Time) bool {
+ return o.CreatedAt != nil && timestamp.UnixMilli() >= o.CreatedAt.Time().UnixMilli() && timestamp.UnixMilli() < o.ExpiredAt.UnixMilli()
 }
 
 func orderMatchAddress(o model.Order) string {
